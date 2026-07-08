@@ -55,6 +55,7 @@
         "https://api.lovable.dev/*"
       ],
       "js": [
+        "license-core.js",
         "lovable-license-validator.js",
         "local-activation.js",
         "extension-config.js",

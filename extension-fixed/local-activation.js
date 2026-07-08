@@ -548,8 +548,13 @@
     return storageGet([STORAGE_KEY_LICENSE_KEY, STORAGE_KEY_CACHE, "ql_license_data"]).then(function (res) {
       var key = res[STORAGE_KEY_LICENSE_KEY];
       if (!key) return null;
-      if (res[STORAGE_KEY_CACHE] && isExpired(res[STORAGE_KEY_CACHE].expiresAt)) return null;
-      return res.ql_license_data || null;
+      // Only report an active license if the signed token cryptographically
+      // verifies for this device. The token embeds its own expiry, so a
+      // client-edited cache.expiresAt or ql_license_data cannot grant access.
+      return verifyStoredToken().then(function (v) {
+        if (!v.ok) return null;
+        return res.ql_license_data || null;
+      });
     });
   }
 

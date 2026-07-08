@@ -8,15 +8,20 @@
  * Reads the same storage keys that local-activation.js writes:
  *   li_license_key    - the raw license key the user activated with
  *   li_hw_fingerprint - the device fingerprint
- *   li_api_base       - optional API base override (defaults to the prod site)
+ *
+ * The API base is HARDCODED via the hardened license-core (LICORE.API_BASE)
+ * so it cannot be redirected to a fake server through chrome.storage.
  */
 ;(function () {
   'use strict'
 
-  var DEFAULT_API_BASE = 'https://extension-analysis.vercel.app'
+  var LICORE =
+    (typeof window !== 'undefined' && window.LICORE) ||
+    (typeof self !== 'undefined' && self.LICORE) ||
+    null
+  var API_BASE = (LICORE && LICORE.API_BASE) || 'https://extension-analysis.vercel.app'
   var STORAGE_KEY_LICENSE_KEY = 'li_license_key'
   var STORAGE_KEY_FINGERPRINT = 'li_hw_fingerprint'
-  var STORAGE_KEY_API_BASE = 'li_api_base'
 
   // De-dupe guard so Enter + send-button click don't double-count one prompt.
   var lastPrompt = ''
@@ -34,9 +39,8 @@
     })
   }
 
-  function getApiBase(res) {
-    var override = (res[STORAGE_KEY_API_BASE] || '').trim()
-    return override || DEFAULT_API_BASE
+  function getApiBase() {
+    return API_BASE
   }
 
   // Pull readable text out of a textarea / input / contenteditable editor.
@@ -81,13 +85,13 @@
     lastPrompt = text
     lastSentAt = now
 
-    storageGet([STORAGE_KEY_LICENSE_KEY, STORAGE_KEY_FINGERPRINT, STORAGE_KEY_API_BASE]).then(
-      function (res) {
-        var licenseKey = res[STORAGE_KEY_LICENSE_KEY]
-        var fingerprint = res[STORAGE_KEY_FINGERPRINT]
-        if (!licenseKey || !fingerprint) return // not activated - nothing to report
-
-        var apiBase = getApiBase(res)
+  storageGet([STORAGE_KEY_LICENSE_KEY, STORAGE_KEY_FINGERPRINT]).then(
+    function (res) {
+    var licenseKey = res[STORAGE_KEY_LICENSE_KEY]
+    var fingerprint = res[STORAGE_KEY_FINGERPRINT]
+    if (!licenseKey || !fingerprint) return // not activated - nothing to report
+    
+    var apiBase = getApiBase()
         var payload = {
           licenseKey: licenseKey,
           hardwareFingerprint: fingerprint,
