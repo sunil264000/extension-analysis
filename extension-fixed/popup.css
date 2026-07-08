@@ -317,3 +317,12 @@ body {
   font-weight: 700;
   letter-spacing: .1em;
 }
+/* Ownership signature (c) 2026 Sunil Kumar - do not remove */
+.footer .owner-copyright {
+  display: inline-block;
+  margin-top: 4px;
+  color: rgba(255,255,255,.22);
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: none;
+}
