@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
   getCustomerProfile,
@@ -9,7 +8,20 @@ import {
   getMyPayments,
 } from '@/app/actions/customer'
 import { License, Payment, Customer } from '@/lib/db/schema'
-import { Copy, Download } from 'lucide-react'
+import {
+  CheckCircle2,
+  Copy,
+  Infinity as InfinityIcon,
+  KeyRound,
+  ShoppingBag,
+  Wallet,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+
+function daysLeft(expiresAt: Date | string): number {
+  const ms = new Date(expiresAt).getTime() - Date.now()
+  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)))
+}
 
 export default function DashboardPage() {
   const [customer, setCustomer] = useState<Customer | null>(null)
@@ -35,7 +47,6 @@ export default function DashboardPage() {
         setLoading(false)
       }
     }
-
     loadData()
   }, [])
 
@@ -46,7 +57,11 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return <div className="text-center py-8">Loading your dashboard...</div>
+    return (
+      <div className="flex min-h-svh items-center justify-center bg-background text-muted-foreground">
+        Loading your dashboard...
+      </div>
+    )
   }
 
   const activeLicenses = licenses.filter((l) => l.status === 'active').length
@@ -56,154 +71,190 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="border-b bg-card">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="font-bold text-lg">
-              Lovable Infinity
-            </Link>
-            <div className="flex items-center gap-4">
-              <Link href="/shop" className="text-sm hover:text-primary">
-                Buy License
-              </Link>
-              <span className="text-sm text-muted-foreground">{customer?.email}</span>
-              <form action="/api/auth/sign-out" method="POST">
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                >
-                  Sign Out
-                </button>
-              </form>
-            </div>
+      <nav className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+          <Link href="/" className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient">
+              <InfinityIcon className="h-5 w-5 text-white" strokeWidth={2.5} />
+            </span>
+            <span className="font-display text-lg font-bold tracking-tight">
+              Lovable <span className="text-gradient">Infinity</span>
+            </span>
+          </Link>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-sm text-muted-foreground sm:inline">
+              {customer?.email}
+            </span>
+            <Button asChild size="sm" className="bg-brand-gradient text-white hover:opacity-90">
+              <Link href="/shop">Buy license</Link>
+            </Button>
+            <form action="/api/auth/sign-out" method="POST">
+              <Button type="submit" size="sm" variant="outline">
+                Sign out
+              </Button>
+            </form>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
+      <main className="mx-auto max-w-6xl px-4 py-10">
+        <h1 className="font-display text-3xl font-bold">Dashboard</h1>
+        <p className="mt-1 text-muted-foreground">
+          Manage your license keys and see how much time you have left.
+        </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-card border rounded-lg p-6">
-            <h3 className="text-sm font-medium text-muted-foreground">Active Licenses</h3>
-            <p className="text-3xl font-bold mt-2">{activeLicenses}</p>
-          </div>
-          <div className="bg-card border rounded-lg p-6">
-            <h3 className="text-sm font-medium text-muted-foreground">Completed Purchases</h3>
-            <p className="text-3xl font-bold mt-2">{completedPayments}</p>
-          </div>
-          <div className="bg-card border rounded-lg p-6">
-            <h3 className="text-sm font-medium text-muted-foreground">Total Spent</h3>
-            <p className="text-3xl font-bold mt-2">
-              ₹{parseFloat(customer?.totalSpent.toString() || '0').toLocaleString()}
-            </p>
-          </div>
+        {/* Stat cards */}
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <StatCard icon={KeyRound} label="Active licenses" value={String(activeLicenses)} />
+          <StatCard icon={ShoppingBag} label="Completed purchases" value={String(completedPayments)} />
+          <StatCard
+            icon={Wallet}
+            label="Total spent"
+            value={`Tk ${parseFloat(customer?.totalSpent?.toString() || '0').toLocaleString()}`}
+          />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Licenses Section */}
-          <div className="bg-card border rounded-lg overflow-hidden">
-            <div className="p-6 border-b flex justify-between items-center">
-              <h2 className="text-xl font-bold">Your Licenses</h2>
-              <Link
-                href="/shop"
-                className="text-sm px-3 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                Buy License
-              </Link>
+        <div className="mt-8 grid gap-6 lg:grid-cols-2">
+          {/* Licenses */}
+          <section className="overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4">
+              <h2 className="font-display text-lg font-semibold">Your licenses</h2>
+              <Button asChild size="sm" variant="ghost">
+                <Link href="/shop">Buy more</Link>
+              </Button>
             </div>
-            <div className="divide-y">
+            <div className="divide-y divide-border">
               {licenses.length > 0 ? (
-                licenses.map((license) => (
-                  <div key={license.id} className="p-6 hover:bg-muted/50 transition-colors">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <p className="font-mono text-sm font-semibold">{license.licenseKey}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Expires: {new Date(license.expiresAt).toLocaleDateString()}
-                        </p>
+                licenses.map((license) => {
+                  const left = daysLeft(license.expiresAt)
+                  const isActive = license.status === 'active' && left > 0
+                  return (
+                    <div key={license.id} className="p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-mono text-sm font-semibold">
+                            {license.licenseKey}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Expires {new Date(license.expiresAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                            isActive
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                              : 'border-destructive/40 bg-destructive/10 text-destructive'
+                          }`}
+                        >
+                          {isActive ? `${left} days left` : 'Expired'}
+                        </span>
                       </div>
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-semibold ${
-                          license.status === 'active'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {license.status}
-                      </span>
+
+                      {isActive && (
+                        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-brand-gradient"
+                            style={{ width: `${Math.min(100, (left / 30) * 100)}%` }}
+                          />
+                        </div>
+                      )}
+
+                      <div className="mt-4 flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => copyToClipboard(license.licenseKey, `license-${license.id}`)}
+                        >
+                          {copied === `license-${license.id}` ? (
+                            <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          {copied === `license-${license.id}` ? 'Copied' : 'Copy key'}
+                        </Button>
+                        <Button asChild size="sm" variant="ghost">
+                          <Link href={`/dashboard/license/${license.id}`}>Details</Link>
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() =>
-                          copyToClipboard(license.licenseKey, `license-${license.id}`)
-                        }
-                        className="text-xs px-2 py-1 rounded border hover:bg-accent transition-colors flex items-center gap-1"
-                      >
-                        <Copy className="w-3 h-3" />
-                        {copied === `license-${license.id}` ? 'Copied!' : 'Copy'}
-                      </button>
-                      <Link
-                        href={`/dashboard/license/${license.id}`}
-                        className="text-xs px-2 py-1 rounded border hover:bg-accent transition-colors"
-                      >
-                        Details
-                      </Link>
-                    </div>
-                  </div>
-                ))
+                  )
+                })
               ) : (
-                <div className="p-6 text-center text-muted-foreground">
-                  No licenses yet. Buy one to get started!
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  No licenses yet.{' '}
+                  <Link href="/shop" className="text-brand underline-offset-4 hover:underline">
+                    Buy one to get started
+                  </Link>
+                  .
                 </div>
               )}
             </div>
-          </div>
+          </section>
 
-          {/* Payment History */}
-          <div className="bg-card border rounded-lg overflow-hidden">
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-bold">Payment History</h2>
+          {/* Payments */}
+          <section className="overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="border-b border-border px-6 py-4">
+              <h2 className="font-display text-lg font-semibold">Payment history</h2>
             </div>
-            <div className="divide-y max-h-96 overflow-y-auto">
+            <div className="max-h-[28rem] divide-y divide-border overflow-y-auto">
               {payments.length > 0 ? (
-                payments.map((payment) => (
-                  <div key={payment.id} className="p-6 hover:bg-muted/50 transition-colors">
-                    <div className="flex justify-between items-start">
+                payments.map((payment) => {
+                  const done =
+                    payment.status === 'completed' || payment.status === 'success'
+                  return (
+                    <div key={payment.id} className="flex items-start justify-between p-5">
                       <div>
                         <p className="font-semibold">
-                          ₹{parseFloat(payment.amount.toString()).toLocaleString()}
+                          Tk {parseFloat(payment.amount.toString()).toLocaleString()}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(payment.createdAt).toLocaleDateString()}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Gateway: {payment.paymentGateway}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Date(payment.createdAt).toLocaleDateString()} ·{' '}
+                          {payment.paymentGateway}
                         </p>
                       </div>
                       <span
-                        className={`px-2 py-1 rounded text-xs font-semibold ${
-                          payment.status === 'completed' || payment.status === 'success'
-                            ? 'bg-green-100 text-green-800'
+                        className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                          done
+                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
                             : payment.status === 'pending'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-red-100 text-red-800'
+                              ? 'border-brand/40 bg-brand/10 text-brand'
+                              : 'border-destructive/40 bg-destructive/10 text-destructive'
                         }`}
                       >
                         {payment.status}
                       </span>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               ) : (
-                <div className="p-6 text-center text-muted-foreground">
-                  No payments yet
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  No payments yet.
                 </div>
               )}
             </div>
-          </div>
+          </section>
         </div>
       </main>
+    </div>
+  )
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Icon className="h-4 w-4 text-brand" />
+        <span className="text-sm">{label}</span>
+      </div>
+      <p className="mt-3 font-display text-3xl font-bold">{value}</p>
     </div>
   )
 }
