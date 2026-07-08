@@ -9,7 +9,7 @@ import {
   usageTracking,
   promptEvents,
 } from '@/lib/db/schema'
-import { eq, desc, and, gte, lte, sql, ilike, or } from 'drizzle-orm'
+import { eq, desc, and, gt, gte, lte, sql, ilike, or } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import crypto from 'crypto'
 import { requireAdmin } from '@/lib/auth-helpers'
@@ -138,13 +138,19 @@ export async function extendLicense(licenseId: string, extraDays: number) {
   return newExpiry
 }
 
-/** Returns just active tiers for the admin creation form. */
+/**
+ * Returns tiers an admin can manually issue: active AND with a real,
+ * day-based duration. The free trial tier (durationDays = 0, measured in
+ * minutes and granted only via the automatic trial flow) is excluded so it
+ * can never be selected by mistake — picking it produced a license that
+ * expired the instant it was created.
+ */
 export async function getActiveTiersForAdmin() {
   await getUser()
   return db
     .select()
     .from(licenseTiers)
-    .where(eq(licenseTiers.isActive, true))
+    .where(and(eq(licenseTiers.isActive, true), gt(licenseTiers.durationDays, 0)))
     .orderBy(licenseTiers.price)
 }
 
@@ -282,6 +288,15 @@ export async function createManualLicense(data: {
 
   const durationDays = data.durationDaysOverride ?? tier.durationDays
 
+  // Guard: a manually issued license must have a positive duration, otherwise
+  // it expires the instant it is created. (The minute-based free trial is
+  // issued through its own dedicated flow, never here.)
+  if (!Number.isFinite(durationDays) || durationDays < 1) {
+    throw new Error(
+      'Invalid duration: choose a paid tier or enter an override of at least 1 day.'
+    )
+  }
+  
   const seg = (n: number) => crypto.randomBytes(n).toString('hex').toUpperCase()
   const licenseKey = `LI-${seg(4)}-${seg(2)}-${seg(2)}-${seg(2)}`
 
