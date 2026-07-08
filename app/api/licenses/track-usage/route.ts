@@ -4,6 +4,17 @@ import { licenses, usageTracking, licenseTiers } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import crypto from 'crypto'
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
+
 interface TrackUsageRequest {
   licenseKey: string
   hardwareFingerprint: string
@@ -21,7 +32,16 @@ interface TrackUsageResponse {
   error?: string
 }
 
+function withCors<T>(res: NextResponse<T>): NextResponse<T> {
+  Object.entries(CORS_HEADERS).forEach(([k, v]) => res.headers.set(k, v))
+  return res
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse<TrackUsageResponse>> {
+  return withCors(await handleTrackUsage(request))
+}
+
+async function handleTrackUsage(request: NextRequest): Promise<NextResponse<TrackUsageResponse>> {
   try {
     const body: TrackUsageRequest = await request.json()
     const { licenseKey, hardwareFingerprint } = body

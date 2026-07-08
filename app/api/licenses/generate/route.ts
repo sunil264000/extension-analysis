@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { licenses, payments } from '@/lib/db/schema'
+import { licenses, payments, licenseTiers } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import crypto from 'crypto'
 
@@ -95,9 +95,26 @@ export async function POST(request: NextRequest): Promise<NextResponse<GenerateR
     // Generate new license key
     const licenseKey = generateLicenseKey()
 
-    // Calculate expiry date based on tier duration
+    // Calculate expiry date based on the tier's real duration
+    const tierRecord = await db
+      .select()
+      .from(licenseTiers)
+      .where(eq(licenseTiers.id, tierId))
+      .limit(1)
+
+    if (!tierRecord || tierRecord.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'License tier not found',
+          error: 'TIER_NOT_FOUND',
+        },
+        { status: 404 }
+      )
+    }
+
+    const tierDuration = tierRecord[0].durationDays || 30
     const expiryDate = new Date()
-    const tierDuration = 30 // Default 30 days - in production, fetch from tier config
     expiryDate.setDate(expiryDate.getDate() + tierDuration)
 
     // Create license

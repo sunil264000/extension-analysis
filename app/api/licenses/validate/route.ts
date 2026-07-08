@@ -1,48 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { licenses, licenseActivations, licenseTiers } from '@/lib/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import crypto from 'crypto'
+
+// ---------------------------------------------------------------------------
+// CORS — the extension calls this endpoint cross-origin from lovable.dev,
+// so every response (including errors and preflight) must carry CORS headers.
+// ---------------------------------------------------------------------------
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+}
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: CORS_HEADERS })
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
 
 interface ValidateRequest {
   licenseKey: string
   hardwareFingerprint: string
 }
 
-interface ValidateResponse {
-  valid: boolean
-  message: string
-  license?: {
-    licenseKey: string
-    tierId: string
-    tier?: {
-      displayName: string
-      maxSeats: number
-      maxUsageLimit: number
-      durationDays: number
-      features: string[]
-    }
-    expiresAt: string
-    seatsUsed: number
-    usageCount: number
-    status: string
-  }
-  error?: string
-}
-
-export async function POST(request: NextRequest): Promise<NextResponse<ValidateResponse>> {
+export async function POST(request: NextRequest) {
   try {
-    const body: ValidateRequest = await request.json()
-    const { licenseKey, hardwareFingerprint } = body
+    const body = (await request.json()) as ValidateRequest
+    const licenseKey = (body.licenseKey || '').trim()
+    const hardwareFingerprint = (body.hardwareFingerprint || '').trim()
 
     if (!licenseKey || !hardwareFingerprint) {
-      return NextResponse.json(
+      return json(
         {
           valid: false,
           message: 'Missing licenseKey or hardwareFingerprint',
           error: 'INVALID_REQUEST',
         },
-        { status: 400 }
+        400
       )
     }
 
@@ -54,127 +53,119 @@ export async function POST(request: NextRequest): Promise<NextResponse<ValidateR
       .limit(1)
 
     if (!licenseRecord || licenseRecord.length === 0) {
-      return NextResponse.json(
+      return json(
         {
           valid: false,
           message: 'License key not found',
           error: 'LICENSE_NOT_FOUND',
         },
-        { status: 404 }
+        404
       )
     }
 
     const license = licenseRecord[0]
 
-    // Check if license is active
+    // Check if license is active (e.g. not revoked/suspended)
     if (license.status !== 'active') {
-      return NextResponse.json(
+      return json(
         {
           valid: false,
           message: `License is ${license.status}`,
           error: 'LICENSE_INACTIVE',
         },
-        { status: 403 }
+        403
       )
     }
 
-    // Check expiry
+    // Check expiry (duration-based licensing)
     const now = new Date()
     if (license.expiresAt < now) {
       await db.update(licenses).set({ status: 'expired' }).where(eq(licenses.id, license.id))
-      return NextResponse.json(
+      return json(
         {
           valid: false,
           message: 'License has expired',
           error: 'LICENSE_EXPIRED',
+          expiresAt: license.expiresAt.toISOString(),
         },
-        { status: 403 }
+        403
       )
     }
 
-    // Check device binding - verify hardware fingerprint
-    if (license.hardwareFingerprints && license.hardwareFingerprints.length > 0) {
-      const deviceFound = license.hardwareFingerprints.includes(hardwareFingerprint)
-
-      if (!deviceFound) {
-        // Check if still can add more devices (seats)
-        if (license.seatsUsed >= license.maxSeats) {
-          return NextResponse.json(
-            {
-              valid: false,
-              message: 'Maximum device seats reached for this license',
-              error: 'MAX_SEATS_EXCEEDED',
-            },
-            { status: 403 }
-          )
-        }
-
-        // Add new device
-        const updatedFingerprints = [...(license.hardwareFingerprints || []), hardwareFingerprint]
-        await db
-          .update(licenses)
-          .set({
-            hardwareFingerprints: updatedFingerprints,
-            seatsUsed: license.seatsUsed + 1,
-          })
-          .where(eq(licenses.id, license.id))
-
-        // Create activation record
-        const activationId = crypto.randomUUID()
-        await db.insert(licenseActivations).values({
-          id: activationId,
-          licenseId: license.id,
-          hardwareFingerprint,
-        })
-      }
-    } else {
-      // First activation - bind to this device
-      const updatedFingerprints = [hardwareFingerprint]
-      await db
-        .update(licenses)
-        .set({
-          hardwareFingerprints: updatedFingerprints,
-          seatsUsed: 1,
-        })
-        .where(eq(licenses.id, license.id))
-
-      const activationId = crypto.randomUUID()
-      await db.insert(licenseActivations).values({
-        id: activationId,
-        licenseId: license.id,
-        hardwareFingerprint,
-      })
-    }
-
-    // Get tier info
+    // Get tier info (for seat limits + display)
     const tierRecord = await db
       .select()
       .from(licenseTiers)
       .where(eq(licenseTiers.id, license.tierId))
       .limit(1)
+    const tier = tierRecord?.[0]
+    const maxSeats = tier?.maxSeats ?? 1
+
+    // Device binding — verify / register the hardware fingerprint
+    const boundDevices = license.hardwareFingerprints || []
+    const deviceFound = boundDevices.includes(hardwareFingerprint)
+
+    if (!deviceFound) {
+      if (boundDevices.length >= maxSeats) {
+        return json(
+          {
+            valid: false,
+            message: 'Maximum device seats reached for this license',
+            error: 'MAX_SEATS_EXCEEDED',
+          },
+          403
+        )
+      }
+
+      const updatedFingerprints = [...boundDevices, hardwareFingerprint]
+      await db
+        .update(licenses)
+        .set({
+          hardwareFingerprints: updatedFingerprints,
+          seatsUsed: updatedFingerprints.length,
+        })
+        .where(eq(licenses.id, license.id))
+
+      await db.insert(licenseActivations).values({
+        id: crypto.randomUUID(),
+        licenseId: license.id,
+        hardwareFingerprint,
+      })
+    }
 
     // Update last validated timestamp
     await db
       .update(licenses)
-      .set({ lastValidatedAt: new Date() })
+      .set({ lastValidatedAt: now })
       .where(eq(licenses.id, license.id))
 
-    return NextResponse.json({
+    // Compute remaining duration (whole days, rounded up, min 0)
+    const msRemaining = license.expiresAt.getTime() - now.getTime()
+    const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)))
+
+    return json({
       valid: true,
       message: 'License is valid',
+      // Flat fields the extension reads directly
+      planName: tier?.displayName ?? 'Pro',
+      expiresAt: license.expiresAt.toISOString(),
+      daysRemaining,
+      seatsUsed: deviceFound ? license.seatsUsed : boundDevices.length + 1,
+      maxSeats,
       license: {
         licenseKey: license.licenseKey,
         tierId: license.tierId,
-        tier: tierRecord?.[0]
+        tier: tier
           ? {
-              displayName: tierRecord[0].displayName,
-              maxSeats: tierRecord[0].maxSeats,
-              maxUsageLimit: tierRecord[0].maxUsageLimit || 0,
-              durationDays: tierRecord[0].durationDays,
-              features: tierRecord[0].features || [],
+              displayName: tier.displayName,
+              maxSeats: tier.maxSeats,
+              maxUsageLimit: tier.maxUsageLimit || 0,
+              durationDays: tier.durationDays,
+              features: tier.features || [],
             }
           : undefined,
         expiresAt: license.expiresAt.toISOString(),
+        daysRemaining,
         seatsUsed: license.seatsUsed,
         usageCount: license.usageCount,
         status: license.status,
@@ -182,13 +173,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<ValidateR
     })
   } catch (error) {
     console.error('[License Validation Error]', error)
-    return NextResponse.json(
+    return json(
       {
         valid: false,
         message: 'Internal server error',
         error: 'SERVER_ERROR',
       },
-      { status: 500 }
+      500
     )
   }
 }
