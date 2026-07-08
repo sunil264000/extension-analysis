@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "prebuild": "node scripts/build-extension-zip.mjs",
+    "build:extension": "node scripts/build-extension-zip.mjs",
     "start": "next start",
     "lint": "eslint ."
   },
@@ -38,6 +40,7 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "javascript-obfuscator": "^5.4.3",
     "jszip": "^3.10.1",
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",

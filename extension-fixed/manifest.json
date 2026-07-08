@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Loveable Infinity",
-  "version": "6.5.0",
-  "description": "Loveable Infinity extension with smart automation.",
+  "version": "6.6.0",
+  "description": "Loveable Infinity extension with smart automation. Modded bY Sk2.",
   "permissions": [
     "storage",
     "activeTab",
