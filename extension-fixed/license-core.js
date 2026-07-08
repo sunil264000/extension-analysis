@@ -32,11 +32,12 @@
   // ---- HARDCODED CONFIG (no chrome.storage override — cannot be redirected) --
   var API_BASE = 'https://extension-analysis.vercel.app'
   var OWNER_TAG = 'Modded bY Sk2'
-  var BUILD_TAG = 'v7-signed-tokens'
+  var BUILD_TAG = 'v7.1-rotated-key'
 
   // ECDSA P-256 public key (SPKI, base64). Pairs with the server private key.
+  // Rotated key (v7.1). Private half lives in LICENSE_SIGNING_KEY on the server.
   var PUBKEY_SPKI =
-    'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEeKTDLg/0pD54M/Q4KhwdM4Byx0UvAtzN+BfvvbHTWZzFz/kxO7VzfUUvsCBFK+vvGlbvy9Xip3d7UcWI/0RmzA=='
+    'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEf2AjEhIjyzYF3B/l8fakdGPvbXQyij3JI5HyfvpywcXfLdaaDwYVRexD6qQ2bOLX5KhkVNbNX8Hapx+PfLsdHA=='
 
   var STORAGE_KEY_FINGERPRINT = 'li_hw_fingerprint'
 

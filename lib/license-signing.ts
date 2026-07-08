@@ -24,14 +24,15 @@ import crypto from 'crypto'
  *   extension — the committed fallback should then be considered rotated out.
  */
 
-// Generated ECDSA P-256 private key (JWK). Fallback only; override with env.
+// Rotated ECDSA P-256 private key (JWK), v7.1. Fallback only; the authoritative
+// private key should live in the LICENSE_SIGNING_KEY env var on the server.
 const FALLBACK_PRIVATE_JWK =
-  '{"kty":"EC","x":"eKTDLg_0pD54M_Q4KhwdM4Byx0UvAtzN-BfvvbHTWZw","y":"xc_5MTu1c31FL7AgRSvr7xpW78vV4qd3e1HFiP9EZsw","crv":"P-256","d":"VUxpqxNTFOvWFnHbcBWTZnvvVxNwB90DbnGAH9m8mbE"}'
+  '{"kty":"EC","x":"f2AjEhIjyzYF3B_l8fakdGPvbXQyij3JI5HyfvpywcU","y":"3y3Wmg8GFUXsQ-qkNmzi1-SoZFTWzV_B2qcfj3y7HRw","crv":"P-256","d":"66jp4Uyxeyyn_yOnGYv-Ee6EsfVSiQFEGnH2GOouN3U"}'
 
 // The public SPKI (base64) that ships inside the extension, exported for the
 // key-generation script and documentation. Not secret.
 export const PUBLIC_SPKI_B64 =
-  'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEeKTDLg/0pD54M/Q4KhwdM4Byx0UvAtzN+BfvvbHTWZzFz/kxO7VzfUUvsCBFK+vvGlbvy9Xip3d7UcWI/0RmzA=='
+  'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEf2AjEhIjyzYF3B/l8fakdGPvbXQyij3JI5HyfvpywcXfLdaaDwYVRexD6qQ2bOLX5KhkVNbNX8Hapx+PfLsdHA=='
 
 function base64url(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
