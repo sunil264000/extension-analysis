@@ -7,8 +7,9 @@ import {
   customers,
   payments,
   usageTracking,
+  promptEvents,
 } from '@/lib/db/schema'
-import { eq, desc, and, gte, lte } from 'drizzle-orm'
+import { eq, desc, and, gte, lte, sql, ilike, or } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import crypto from 'crypto'
 import { requireAdmin } from '@/lib/auth-helpers'
@@ -229,4 +230,121 @@ export async function createManualLicense(data: {
   await db.insert(licenses).values(license as any)
   revalidatePath('/admin/licenses')
   return license
+}
+
+// ---------------------------------------------------------------------------
+// Prompt monitoring & abuse detection
+// ---------------------------------------------------------------------------
+
+/** High-level prompt-usage overview across all users. */
+export async function getPromptOverview() {
+  await getUser()
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+
+  const [totals] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      today: sql<number>`count(*) filter (where ${promptEvents.createdAt} >= ${startOfToday.toISOString()})::int`,
+      flagged: sql<number>`count(*) filter (where ${promptEvents.flagged})::int`,
+      users: sql<number>`count(distinct ${promptEvents.userId})::int`,
+    })
+    .from(promptEvents)
+
+  // Prompts per day for the last 30 days.
+  const since = new Date()
+  since.setHours(0, 0, 0, 0)
+  since.setDate(since.getDate() - 29)
+  const rows = await db
+    .select({
+      day: sql<string>`to_char(${promptEvents.createdAt}, 'YYYY-MM-DD')`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(promptEvents)
+    .where(gte(promptEvents.createdAt, since))
+    .groupBy(sql`to_char(${promptEvents.createdAt}, 'YYYY-MM-DD')`)
+
+  const byDay = new Map(rows.map((r) => [r.day, Number(r.count)]))
+  const daily: { date: string; prompts: number }[] = []
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(since)
+    d.setDate(since.getDate() + i)
+    const key = d.toISOString().slice(0, 10)
+    daily.push({ date: key, prompts: byDay.get(key) ?? 0 })
+  }
+
+  return {
+    totalPrompts: Number(totals?.total ?? 0),
+    promptsToday: Number(totals?.today ?? 0),
+    flaggedPrompts: Number(totals?.flagged ?? 0),
+    activeUsers: Number(totals?.users ?? 0),
+    daily,
+  }
+}
+
+/**
+ * Full prompt log with the customer email joined in. Supports search and a
+ * flagged-only filter for abuse review.
+ */
+export async function getPromptEvents(opts?: {
+  search?: string
+  flaggedOnly?: boolean
+  limit?: number
+}) {
+  await getUser()
+  const limit = opts?.limit ?? 100
+
+  const conditions = []
+  if (opts?.flaggedOnly) conditions.push(eq(promptEvents.flagged, true))
+  if (opts?.search) {
+    const term = `%${opts.search}%`
+    conditions.push(
+      or(
+        ilike(promptEvents.promptText, term),
+        ilike(promptEvents.licenseKey, term),
+        ilike(customers.email, term)
+      )
+    )
+  }
+
+  const rows = await db
+    .select({
+      id: promptEvents.id,
+      userId: promptEvents.userId,
+      email: customers.email,
+      licenseKey: promptEvents.licenseKey,
+      promptText: promptEvents.promptText,
+      promptLength: promptEvents.promptLength,
+      pageUrl: promptEvents.pageUrl,
+      projectId: promptEvents.projectId,
+      ipAddress: promptEvents.ipAddress,
+      hardwareFingerprint: promptEvents.hardwareFingerprint,
+      flagged: promptEvents.flagged,
+      flagReason: promptEvents.flagReason,
+      createdAt: promptEvents.createdAt,
+    })
+    .from(promptEvents)
+    .leftJoin(customers, eq(customers.userId, promptEvents.userId))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(promptEvents.createdAt))
+    .limit(limit)
+
+  return rows.map((r) => ({
+    ...r,
+    createdAt: new Date(r.createdAt).toISOString(),
+  }))
+}
+
+/** Manually flag or clear a prompt event during abuse review. */
+export async function setPromptFlag(
+  id: string,
+  flagged: boolean,
+  reason?: string
+) {
+  await getUser()
+  await db
+    .update(promptEvents)
+    .set({ flagged, flagReason: flagged ? reason ?? 'Manually flagged' : null })
+    .where(eq(promptEvents.id, id))
+  revalidatePath('/admin/usage')
 }

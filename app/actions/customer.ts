@@ -2,8 +2,14 @@
 
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { licenses, customers, licenseTiers, payments } from '@/lib/db/schema'
-import { eq, desc } from 'drizzle-orm'
+import {
+  licenses,
+  customers,
+  licenseTiers,
+  payments,
+  promptEvents,
+} from '@/lib/db/schema'
+import { eq, desc, and, gte, sql } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import crypto from 'crypto'
 import { grantTrialLicense, getUserRole } from '@/lib/auth-helpers'
@@ -32,6 +38,98 @@ export async function claimTrialLicense() {
 export async function getIsAdmin() {
   const user = await getUser()
   return (await getUserRole(user.id)) === 'admin'
+}
+
+export type UsageStats = {
+  totalPrompts: number
+  promptsToday: number
+  promptsThisWeek: number
+  flaggedCount: number
+  daily: { date: string; prompts: number }[]
+  recent: {
+    id: string
+    promptText: string | null
+    promptLength: number
+    pageUrl: string | null
+    projectId: string | null
+    flagged: boolean
+    flagReason: string | null
+    createdAt: string
+  }[]
+}
+
+/**
+ * Aggregated usage for the signed-in user's own prompt activity. Powers the
+ * dashboard graph, stat cards, and recent-activity list. Scoped strictly to the
+ * current user's rows (no RLS on Neon, so we filter by userId everywhere).
+ */
+export async function getMyUsageStats(days = 30): Promise<UsageStats> {
+  const user = await getUser()
+
+  const since = new Date()
+  since.setHours(0, 0, 0, 0)
+  since.setDate(since.getDate() - (days - 1))
+
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+
+  const startOfWeek = new Date()
+  startOfWeek.setHours(0, 0, 0, 0)
+  startOfWeek.setDate(startOfWeek.getDate() - 6)
+
+  // Per-day counts for the window.
+  const rows = await db
+    .select({
+      day: sql<string>`to_char(${promptEvents.createdAt}, 'YYYY-MM-DD')`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(promptEvents)
+    .where(and(eq(promptEvents.userId, user.id), gte(promptEvents.createdAt, since)))
+    .groupBy(sql`to_char(${promptEvents.createdAt}, 'YYYY-MM-DD')`)
+
+  const byDay = new Map(rows.map((r) => [r.day, Number(r.count)]))
+  const daily: { date: string; prompts: number }[] = []
+  for (let i = 0; i < days; i++) {
+    const d = new Date(since)
+    d.setDate(since.getDate() + i)
+    const key = d.toISOString().slice(0, 10)
+    daily.push({ date: key, prompts: byDay.get(key) ?? 0 })
+  }
+
+  const [totals] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      today: sql<number>`count(*) filter (where ${promptEvents.createdAt} >= ${startOfToday.toISOString()})::int`,
+      week: sql<number>`count(*) filter (where ${promptEvents.createdAt} >= ${startOfWeek.toISOString()})::int`,
+      flagged: sql<number>`count(*) filter (where ${promptEvents.flagged})::int`,
+    })
+    .from(promptEvents)
+    .where(eq(promptEvents.userId, user.id))
+
+  const recent = await db
+    .select()
+    .from(promptEvents)
+    .where(eq(promptEvents.userId, user.id))
+    .orderBy(desc(promptEvents.createdAt))
+    .limit(20)
+
+  return {
+    totalPrompts: Number(totals?.total ?? 0),
+    promptsToday: Number(totals?.today ?? 0),
+    promptsThisWeek: Number(totals?.week ?? 0),
+    flaggedCount: Number(totals?.flagged ?? 0),
+    daily,
+    recent: recent.map((r) => ({
+      id: r.id,
+      promptText: r.promptText,
+      promptLength: r.promptLength,
+      pageUrl: r.pageUrl,
+      projectId: r.projectId,
+      flagged: r.flagged,
+      flagReason: r.flagReason,
+      createdAt: new Date(r.createdAt).toISOString(),
+    })),
+  }
 }
 
 export async function getCustomerProfile() {

@@ -41,6 +41,15 @@ export default async function AdminDashboard() {
           <h3 className="font-semibold mb-4">Quick Actions</h3>
           <div className="space-y-3">
             <a
+              href="/admin/usage"
+              className="block p-3 rounded-lg border hover:bg-accent transition-colors"
+            >
+              <div className="font-medium">Extension Usage</div>
+              <div className="text-sm text-muted-foreground">
+                See every prompt users send and review flagged activity
+              </div>
+            </a>
+            <a
               href="/admin/licenses"
               className="block p-3 rounded-lg border hover:bg-accent transition-colors"
             >

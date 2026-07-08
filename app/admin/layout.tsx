@@ -22,11 +22,11 @@ export default async function AdminLayout({
 
   const navItems = [
     { label: 'Dashboard', href: '/admin' },
+    { label: 'Usage', href: '/admin/usage' },
     { label: 'Licenses', href: '/admin/licenses' },
     { label: 'Customers', href: '/admin/customers' },
     { label: 'Payments', href: '/admin/payments' },
     { label: 'Tiers', href: '/admin/tiers' },
-    { label: 'Analytics', href: '/admin/analytics' },
   ]
 
   return (
@@ -51,7 +51,15 @@ export default async function AdminLayout({
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">{session.user.email}</span>
+              <span className="hidden text-sm text-muted-foreground sm:inline">
+                {session.user.email}
+              </span>
+              <Link
+                href="/dashboard"
+                className="rounded-md px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+              >
+                My Dashboard
+              </Link>
               <form action="/api/auth/sign-out" method="POST">
                 <button
                   type="submit"
