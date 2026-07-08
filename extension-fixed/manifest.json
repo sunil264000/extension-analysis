@@ -16,7 +16,9 @@
     "https://api.lovable.dev/*",
     "https://lovable.dev/*",
     "https://lovable-api.com/*",
-    "https://lovableinfy.lovable.app/*"
+    "https://lovableinfy.lovable.app/*",
+    "https://extension-analysis.vercel.app/*",
+    "https://*.vercel.app/*"
   ],
   "action": {
     "default_title": "Loveable Infinity",
