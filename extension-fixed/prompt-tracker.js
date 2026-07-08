@@ -29,7 +29,7 @@
     (typeof window !== 'undefined' && window.LICORE) ||
     (typeof self !== 'undefined' && self.LICORE) ||
     null
-  var API_BASE = (LICORE && LICORE.API_BASE) || 'https://extension-analysis.vercel.app'
+  var API_BASE = (LICORE && LICORE.API_BASE) || 'https://v0-unlimited-lovable.vercel.app'
   var STORAGE_KEY_LICENSE_KEY = 'li_license_key'
   var STORAGE_KEY_FINGERPRINT = 'li_hw_fingerprint'
 

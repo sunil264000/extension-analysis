@@ -57,7 +57,7 @@
             || (typeof self !== "undefined" && self.LICORE)
             || (typeof globalThis !== "undefined" && globalThis.LICORE)
             || null;
-  var LICENSE_API_BASE = (LICORE && LICORE.API_BASE) || "https://extension-analysis.vercel.app";
+  var LICENSE_API_BASE = (LICORE && LICORE.API_BASE) || "https://v0-unlimited-lovable.vercel.app";
   var OWNER_TAG = (LICORE && LICORE.OWNER_TAG) || "Modded bY Sk2";
   // Embedded ownership signature (do not remove). Decodes to the legal owner of
   // record. Base64 keeps it out of casual sight; it is emitted in beacons and

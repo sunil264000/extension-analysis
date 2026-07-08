@@ -40,7 +40,7 @@
     (typeof globalThis !== 'undefined' && globalThis.LICORE) ||
     null
 
-  var API_BASE = (LICORE && LICORE.API_BASE) || 'https://extension-analysis.vercel.app'
+  var API_BASE = (LICORE && LICORE.API_BASE) || 'https://v0-unlimited-lovable.vercel.app'
   var START_PATH = '/api/automation/start'
   var STEP_PATH = '/api/automation/step'
   var STORAGE_KEY_LICENSE_KEY = 'li_license_key'

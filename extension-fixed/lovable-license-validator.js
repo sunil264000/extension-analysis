@@ -5,7 +5,7 @@
  */
 
 const LICENSE_CONFIG = {
-  API_ENDPOINT: 'https://extension-analysis.vercel.app', // Website that issues + validates licenses
+  API_ENDPOINT: 'https://v0-unlimited-lovable.vercel.app', // Website that issues + validates licenses
   STORAGE_KEY: 'lovable_license_data',
   FINGERPRINT_KEY: 'lovable_hw_fingerprint',
   VALIDATION_INTERVAL: 3600000, // 1 hour in ms

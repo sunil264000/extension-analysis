@@ -43,7 +43,7 @@
   'use strict'
 
   // ---- HARDCODED CONFIG (no chrome.storage override — cannot be redirected) --
-  var API_BASE = 'https://extension-analysis.vercel.app'
+  var API_BASE = 'https://v0-unlimited-lovable.vercel.app'
   var OWNER_TAG = 'Modded bY Sk2'
   var BUILD_TAG = 'v7.1-rotated-key'
 
