@@ -126,6 +126,15 @@
         if (expectedFp && payload.fp && payload.fp !== expectedFp) {
           return { ok: false, payload: payload, reason: 'DEVICE_MISMATCH' }
         }
+        // Short heartbeat window: even with a long license, the token must be
+        // refreshed from the server within `ttl`. This forces the extension to
+        // phone home regularly, so a revoked/killed license (or a cracked copy
+        // that blocks the network) stops working within hours instead of never.
+        if (typeof payload.iat === 'number' && typeof payload.ttl === 'number') {
+          if (now > payload.iat + payload.ttl) {
+            return { ok: false, payload: payload, reason: 'STALE' }
+          }
+        }
         return { ok: true, payload: payload, reason: 'OK' }
       })
       .catch(function () {
@@ -204,15 +213,97 @@
     })
   }
 
+  // ==========================================================================
+  //  TAMPER ATTESTATION  (self-destruct tripwires)
+  //  These make casual patching self-defeating: if an attacker deletes one of
+  //  the security scripts, edits the manifest to drop it, or the sibling guard
+  //  globals go missing, attest() fails → the caller wipes the stored license
+  //  and reports to the server, which REVOKES the key. So a half-cracked copy
+  //  bans itself and any resold copies of the same key.
+  // ==========================================================================
+
+  // Security scripts that MUST remain registered in the manifest. Removing any
+  // of them (a common crack step) is detected here.
+  var REQUIRED_SCRIPTS = [
+    'license-core.js',
+    'local-activation.js',
+    'prompt-tracker.js',
+  ]
+
+  function getManifestScripts() {
+    try {
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.getManifest) {
+        return null // not in an extension context (e.g. injected page world)
+      }
+      var m = chrome.runtime.getManifest()
+      var out = []
+      var cs = (m && m.content_scripts) || []
+      for (var i = 0; i < cs.length; i++) {
+        var js = cs[i].js || []
+        for (var j = 0; j < js.length; j++) out.push(js[j])
+      }
+      return out
+    } catch (e) {
+      return null
+    }
+  }
+
+  // Returns { ok, reason }. ok=false means the environment looks tampered.
+  function attest() {
+    return new Promise(function (resolve) {
+      // 1) Sibling global must be present (local-activation sets a beacon).
+      var scripts = getManifestScripts()
+      if (scripts) {
+        for (var i = 0; i < REQUIRED_SCRIPTS.length; i++) {
+          if (scripts.indexOf(REQUIRED_SCRIPTS[i]) === -1) {
+            return resolve({ ok: false, reason: 'MANIFEST_MISSING:' + REQUIRED_SCRIPTS[i] })
+          }
+        }
+      }
+      // 2) This core itself must expose its verify function unmodified-ish.
+      if (typeof verifyToken !== 'function' || typeof getPubKey !== 'function') {
+        return resolve({ ok: false, reason: 'CORE_PATCHED' })
+      }
+      // 3) The public key must be intact (length + prefix sanity).
+      if (!PUBKEY_SPKI || PUBKEY_SPKI.length < 100 || PUBKEY_SPKI.indexOf('MFkwE') !== 0) {
+        return resolve({ ok: false, reason: 'PUBKEY_TAMPERED' })
+      }
+      resolve({ ok: true, reason: 'OK' })
+    })
+  }
+
+  // Fire-and-forget report to the authoritative server → triggers kill switch.
+  function reportTamper(licenseKey, fp, reason, detail) {
+    try {
+      var payload = JSON.stringify({
+        licenseKey: licenseKey || null,
+        hardwareFingerprint: fp || null,
+        reason: reason || 'UNKNOWN',
+        detail: detail || '',
+      })
+      return fetch(API_BASE + '/api/licenses/report-tamper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true,
+      }).catch(function () {})
+    } catch (e) {
+      return Promise.resolve()
+    }
+  }
+
   var LICORE = {
     API_BASE: API_BASE,
     OWNER_TAG: OWNER_TAG,
     BUILD_TAG: BUILD_TAG,
     PUBKEY_SPKI: PUBKEY_SPKI,
+    REQUIRED_SCRIPTS: REQUIRED_SCRIPTS,
     fingerprint: fingerprint,
     computeFingerprint: computeFingerprint,
     verifyToken: verifyToken,
     sha256Hex: sha256Hex,
+    attest: attest,
+    reportTamper: reportTamper,
   }
 
   try {

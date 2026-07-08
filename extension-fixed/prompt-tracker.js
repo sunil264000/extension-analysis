@@ -171,5 +171,49 @@
     true
   )
 
+  // ==========================================================================
+  //  CROSS-GUARD  — mutual attestation with the activation script.
+  //  If local-activation.js was deleted or its manifest entry removed, its
+  //  beacon (window.__LI_ACTIVE) never appears and the hardened core may be
+  //  gone too. When that happens we report a tamper event to the server, which
+  //  revokes the license (kill switch). This makes "just delete the license
+  //  file" backfire: the remaining tracker snitches and the key dies.
+  // ==========================================================================
+  function crossGuard() {
+    try {
+      var beacon =
+        (typeof window !== 'undefined' && window.__LI_ACTIVE) ||
+        (typeof self !== 'undefined' && self.__LI_ACTIVE) ||
+        null
+      var coreOk = LICORE && typeof LICORE.verifyToken === 'function'
+      if (beacon && coreOk) return // healthy
+      storageGet([STORAGE_KEY_LICENSE_KEY, STORAGE_KEY_FINGERPRINT]).then(function (res) {
+        var key = res[STORAGE_KEY_LICENSE_KEY]
+        if (!key) return // nothing activated yet — not a crack, just fresh install
+        var reason = !coreOk ? 'CORE_MISSING' : 'ACTIVATION_MISSING'
+        try {
+          if (LICORE && LICORE.reportTamper) {
+            LICORE.reportTamper(key, res[STORAGE_KEY_FINGERPRINT], reason, 'cross-guard from prompt-tracker')
+          } else {
+            fetch(getApiBase() + '/api/licenses/report-tamper', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                licenseKey: key,
+                hardwareFingerprint: res[STORAGE_KEY_FINGERPRINT] || null,
+                reason: reason,
+                detail: 'cross-guard (no core)',
+              }),
+              keepalive: true,
+            }).catch(function () {})
+          }
+        } catch (e) {}
+      })
+    } catch (e) {}
+  }
+  // Give the sibling scripts a moment to set their beacon, then verify.
+  setTimeout(crossGuard, 4000)
+  setInterval(crossGuard, 90000)
+
   console.log('[LovableInfinity] Prompt tracker active')
 })()

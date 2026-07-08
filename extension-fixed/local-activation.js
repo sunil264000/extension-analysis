@@ -325,6 +325,41 @@
     });
   }
 
+  // Cross-script attestation: verifies the hardened core is present and the
+  // manifest still registers every required security script. On failure we
+  // wipe the license and fire a server tamper report (→ kill switch), so a
+  // partially-cracked install revokes its own key.
+  function runAttestation() {
+    if (!LICORE || typeof LICORE.attest !== "function") {
+      // Core missing entirely → report using whatever key we still have.
+      return storageGet(STORAGE_KEY_LICENSE_KEY).then(function (res) {
+        var key = res[STORAGE_KEY_LICENSE_KEY];
+        try { if (LICORE && LICORE.reportTamper) LICORE.reportTamper(key, null, "NO_CORE", "attest() unavailable"); } catch (e) {}
+        return clearValidation().then(function () { return { ok: false, reason: "NO_CORE" }; });
+      });
+    }
+    return LICORE.attest().then(function (a) {
+      if (a.ok) return { ok: true, reason: "OK" };
+      return Promise.all([storageGet(STORAGE_KEY_LICENSE_KEY), getFingerprint()]).then(function (arr) {
+        var key = arr[0][STORAGE_KEY_LICENSE_KEY];
+        var fp = arr[1];
+        try { LICORE.reportTamper(key, fp, a.reason, "client attestation failed"); } catch (e) {}
+        return clearValidation().then(function () { return { ok: false, reason: a.reason }; });
+      });
+    });
+  }
+
+  // Beacon other guard scripts (prompt-tracker) look for. Its absence tells the
+  // tracker that this activation script was removed/patched.
+  function setBeacon() {
+    try {
+      var stamp = { at: Date.now(), owner: OWNER_TAG };
+      if (typeof window !== "undefined") window.__LI_ACTIVE = stamp;
+      if (typeof self !== "undefined") self.__LI_ACTIVE = stamp;
+      if (typeof globalThis !== "undefined") globalThis.__LI_ACTIVE = stamp;
+    } catch (e) {}
+  }
+
   // ==========================================================================
   //  LICENSE GATE OVERLAY  (only rendered inside the side panel / popup)
   // ==========================================================================
@@ -440,6 +475,20 @@
   //  STARTUP DECISION
   // ==========================================================================
   function boot() {
+    setBeacon();
+    // Attestation runs FIRST. If the security scripts / manifest were tampered
+    // with, we lock and revoke before doing anything else.
+    return runAttestation().then(function (att) {
+      if (!att.ok) {
+        return storageGet(STORAGE_KEY_LICENSE_KEY).then(function (r) {
+          showGate({ prefill: r[STORAGE_KEY_LICENSE_KEY], message: "License integrity check failed. This copy has been locked." });
+        });
+      }
+      return bootInner();
+    });
+  }
+
+  function bootInner() {
     return storageGet([STORAGE_KEY_LICENSE_KEY, STORAGE_KEY_CACHE]).then(function (res) {
       var key = res[STORAGE_KEY_LICENSE_KEY];
       var cache = res[STORAGE_KEY_CACHE];
@@ -509,25 +558,39 @@
   function startHeartbeat() {
     if (!IS_PANEL) return;
     setInterval(function () {
+      setBeacon();
       storageGet(STORAGE_KEY_LICENSE_KEY).then(function (res) {
         var key = res[STORAGE_KEY_LICENSE_KEY];
         if (!key) return;
-        // 1) Catch a hand-forged unlock (ql_license_valid set without a valid token).
-        assertNotTampered().then(function (t) {
-          if (t.tampered) {
-            showGate({ prefill: key, message: "License integrity check failed. Please re-activate." });
+        // 0) Attestation — security scripts + manifest intact? Tamper → revoke.
+        runAttestation().then(function (att) {
+          if (!att.ok) {
+            showGate({ prefill: key, message: "License integrity check failed. This copy has been locked." });
             return;
           }
-          // 2) Verify the signed token is still valid (not expired / right device).
-          verifyStoredToken().then(function (v) {
-            if (!v.ok) {
-              clearValidation().then(function () {
-                var msg = v.reason === "EXPIRED"
-                  ? "Your plan has expired. Renew to continue."
-                  : "License verification failed. Please re-activate.";
-                showGate({ prefill: key, message: msg });
-              });
+          // 1) Catch a hand-forged unlock (ql_license_valid set without a valid token).
+          assertNotTampered().then(function (t) {
+            if (t.tampered) {
+              showGate({ prefill: key, message: "License integrity check failed. Please re-activate." });
+              return;
             }
+            // 2) Verify the signed token is still valid (device / expiry / freshness).
+            verifyStoredToken().then(function (v) {
+              if (!v.ok) {
+                // STALE = token freshness window elapsed → try a silent online
+                // refresh before locking, so briefly-offline users aren't kicked.
+                if (v.reason === "STALE") {
+                  backgroundRevalidate(key);
+                  return;
+                }
+                clearValidation().then(function () {
+                  var msg = v.reason === "EXPIRED"
+                    ? "Your plan has expired. Renew to continue."
+                    : "License verification failed. Please re-activate.";
+                  showGate({ prefill: key, message: msg });
+                });
+              }
+            });
           });
         });
       });
