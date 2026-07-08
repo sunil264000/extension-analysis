@@ -64,7 +64,7 @@ export function SiteFooter() {
         </nav>
 
         <p className="text-xs text-muted-foreground">
-          © {new Date().getFullYear()} {SITE.name}. All rights reserved.
+          © {new Date().getFullYear()} {SITE.name} · {SITE.owner}. All rights reserved.
         </p>
       </div>
     </footer>

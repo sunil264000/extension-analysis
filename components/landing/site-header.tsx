@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button'
 
 const NAV = [
   { label: 'Features', href: '#features' },
-  { label: 'How it works', href: '#how' },
+  { label: 'Tools', href: '#tools' },
+  { label: 'Security', href: '#security' },
   { label: 'Pricing', href: '#pricing' },
+  { label: 'Download', href: '#download' },
   { label: 'FAQ', href: '#faq' },
 ]
 

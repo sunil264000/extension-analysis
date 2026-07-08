@@ -5,9 +5,22 @@ export const SITE = {
   name: 'Lovable Infinity',
   extensionVersion: 'v6.7.0',
   extensionDownload: '/lovable-infinity-patched.zip',
+  extensionSize: '1.0 MB',
+  extensionUpdated: 'July 2026',
+  browser: 'Chrome · Edge · Brave',
+  owner: 'Sunil Kumar',
   // Update this to your real WhatsApp order link.
   whatsapp: 'https://wa.me/8801000000000',
 }
+
+// Highlights shipped in the current build — shown in the download section.
+export const CHANGELOG: string[] = [
+  'Server-authorized licensing with per-device binding',
+  'Encrypted step-by-step automation protocol',
+  'Instant kill-switch for revoked or expired keys',
+  '9 one-click AI actions in the side panel',
+  'Hardened, tamper-checked extension core',
+]
 
 export type PlanTier = {
   id: string

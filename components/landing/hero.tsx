@@ -16,6 +16,9 @@ export function Hero() {
         <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-4 py-1.5 text-xs font-medium text-muted-foreground">
           <span className="h-1.5 w-1.5 rounded-full bg-brand-gradient" />
           Premium Chrome Extension · lovable.dev
+          <span className="ml-1 rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-semibold text-brand">
+            {SITE.extensionVersion}
+          </span>
         </span>
 
         <h1 className="mx-auto mt-6 max-w-4xl text-balance font-display text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">
