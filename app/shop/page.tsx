@@ -1,27 +1,16 @@
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
-import { getAvailableTiers, initiatePayment } from '@/app/actions/customer'
+import { getAvailableTiers } from '@/app/actions/customer'
+import { isCashfreeConfigured } from '@/lib/cashfree'
 import Link from 'next/link'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, Infinity as InfinityIcon } from 'lucide-react'
+import { CheckoutButton } from '@/components/shop/checkout-button'
 
-async function BuyButton({ tierId }: { tierId: string }) {
-  const handleBuy = async () => {
-    'use server'
-    const payment = await initiatePayment(tierId)
-    redirect(`/shop/checkout/${payment.paymentId}`)
-  }
-
-  return (
-    <form action={handleBuy}>
-      <button
-        type="submit"
-        className="w-full px-6 py-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-semibold"
-      >
-        Get License
-      </button>
-    </form>
-  )
+function currencySymbol(code: string) {
+  if (code === 'INR') return '₹'
+  if (code === 'USD') return '$'
+  return code + ' '
 }
 
 export default async function ShopPage() {
@@ -31,89 +20,104 @@ export default async function ShopPage() {
   }
 
   const tiers = await getAvailableTiers()
+  const paymentsReady = isCashfreeConfigured()
+  // Hide the free trial tier from the paid shop grid.
+  const paidTiers = tiers.filter((t) => Number(t.price) > 0)
 
   return (
     <div className="min-h-screen bg-background">
-      <nav className="border-b bg-card">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="font-bold text-lg">
-              Lovable Infinity
+      <nav className="border-b border-border bg-card/60 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-2 font-display text-lg font-bold">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-gradient">
+              <InfinityIcon className="h-4 w-4 text-white" />
+            </span>
+            Lovable Infinity
+          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
+              Dashboard
             </Link>
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="text-sm hover:text-primary">
-                Dashboard
-              </Link>
-              <span className="text-sm text-muted-foreground">{session.user.email}</span>
-              <form action="/api/auth/sign-out" method="POST">
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                >
-                  Sign Out
-                </button>
-              </form>
-            </div>
+            <span className="hidden text-sm text-muted-foreground sm:inline">
+              {session.user.email}
+            </span>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold mb-4">License Plans</h1>
-          <p className="text-xl text-muted-foreground">
-            Choose the perfect plan for your needs
+      <main className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="mx-auto mb-12 max-w-2xl text-center">
+          <h1 className="text-balance font-display text-4xl font-bold tracking-tight">
+            Choose your <span className="text-gradient">license</span>
+          </h1>
+          <p className="mt-4 text-pretty text-lg text-muted-foreground">
+            Unlimited prompts, no credit anxiety. Pick a duration and get your key
+            instantly after payment.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {tiers.map((tier) => (
-            <div
-              key={tier.id}
-              className="bg-card border rounded-lg overflow-hidden flex flex-col hover:shadow-lg transition-shadow"
-            >
-              <div className="p-6 border-b">
-                <h3 className="text-2xl font-bold mb-2">{tier.displayName}</h3>
-                <p className="text-muted-foreground text-sm mb-4">{tier.description}</p>
-                <div className="mb-2">
-                  <span className="text-4xl font-bold">₹{tier.price}</span>
-                  <span className="text-muted-foreground ml-2">/{tier.durationDays} days</span>
-                </div>
-              </div>
+        {!paymentsReady && (
+          <div className="mx-auto mb-8 max-w-2xl rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-center text-sm text-amber-300">
+            Online payments are not fully configured yet. Add your Cashfree API keys
+            to enable instant checkout.
+          </div>
+        )}
 
-              <div className="flex-1 p-6 border-b">
-                <ul className="space-y-3">
-                  <li className="flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                    <span className="text-sm">Max {tier.maxSeats} seats</span>
-                  </li>
-                  {tier.maxUsageLimit && (
-                    <li className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">
-                        {tier.maxUsageLimit.toLocaleString()} API calls/day
-                      </span>
-                    </li>
-                  )}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {paidTiers.map((tier) => {
+            const featured = tier.durationDays >= 30
+            return (
+              <div
+                key={tier.id}
+                className={`relative flex flex-col rounded-2xl border bg-card p-6 ${
+                  featured ? 'border-brand ring-1 ring-brand/40' : 'border-border'
+                }`}
+              >
+                {featured && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand-gradient px-3 py-1 text-xs font-semibold text-white">
+                    Best value
+                  </span>
+                )}
+                <h3 className="font-display text-lg font-semibold">{tier.displayName}</h3>
+                <div className="mt-3 flex items-baseline gap-1">
+                  <span className="text-3xl font-bold">
+                    {currencySymbol(tier.currency)}
+                    {Number(tier.price).toLocaleString()}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    / {tier.durationDays}d
+                  </span>
+                </div>
+
+                <ul className="mt-5 flex-1 space-y-2.5">
                   {tier.features?.map((feature, idx) => (
-                    <li key={idx} className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                      <span className="text-sm">{feature}</span>
+                    <li key={idx} className="flex items-start gap-2.5 text-sm">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                      <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
-              </div>
 
-              <div className="p-6">
-                <BuyButton tierId={tier.id} />
+                <div className="mt-6">
+                  {paymentsReady ? (
+                    <CheckoutButton tierId={tier.id} featured={featured} />
+                  ) : (
+                    <button
+                      disabled
+                      className="w-full rounded-lg bg-secondary px-6 py-3 font-semibold text-muted-foreground opacity-60"
+                    >
+                      Coming soon
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
-        {tiers.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">No license plans available yet</p>
+        {paidTiers.length === 0 && (
+          <div className="py-12 text-center text-muted-foreground">
+            No license plans available yet.
           </div>
         )}
       </main>

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Loveable Infinity",
-  "version": "6.4.5",
+  "version": "6.5.0",
   "description": "Loveable Infinity extension with smart automation.",
   "permissions": [
     "storage",
@@ -66,7 +66,8 @@
         "content-bridge.js",
         "sounds.js",
         "content-templates.js",
-        "content.js"
+        "content.js",
+        "prompt-tracker.js"
       ],
       "css": [
         "theme.css",

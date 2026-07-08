@@ -172,6 +172,36 @@ export const licenseActivations = pgTable('license_activations', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
+// Full record of every prompt the user submits through the extension.
+// This powers the user's usage graphs and gives the admin complete visibility
+// into how the extension is used (including tamper / crack detection).
+export const promptEvents = pgTable(
+  'prompt_events',
+  {
+    id: text('id').primaryKey(),
+    licenseId: text('licenseId'),
+    userId: text('userId').notNull(),
+    licenseKey: text('licenseKey'),
+    promptText: text('promptText'),
+    promptLength: integer('promptLength').notNull().default(0),
+    pageUrl: text('pageUrl'),
+    projectId: text('projectId'),
+    hardwareFingerprint: text('hardwareFingerprint'),
+    ipAddress: text('ipAddress'),
+    userAgent: text('userAgent'),
+    // Abuse / integrity signals
+    flagged: boolean('flagged').notNull().default(false),
+    flagReason: text('flagReason'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_prompt_events_userId').on(table.userId),
+    index('idx_prompt_events_licenseId').on(table.licenseId),
+    index('idx_prompt_events_createdAt').on(table.createdAt),
+    index('idx_prompt_events_flagged').on(table.flagged),
+  ]
+)
+
 // ========== Type Exports ==========
 
 export type User = typeof user.$inferSelect
@@ -181,3 +211,4 @@ export type Customer = typeof customers.$inferSelect
 export type UsageTracking = typeof usageTracking.$inferSelect
 export type Payment = typeof payments.$inferSelect
 export type LicenseActivation = typeof licenseActivations.$inferSelect
+export type PromptEvent = typeof promptEvents.$inferSelect

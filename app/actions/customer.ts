@@ -7,6 +7,8 @@ import { eq, desc } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import crypto from 'crypto'
 import { grantTrialLicense, getUserRole } from '@/lib/auth-helpers'
+import { createCashfreeOrder, isCashfreeConfigured, cashfreeMode } from '@/lib/cashfree'
+import { getBaseUrl } from '@/lib/base-url'
 
 async function getUser() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -137,9 +139,24 @@ export async function getAvailableTiers() {
     .orderBy(licenseTiers.price)
 }
 
+/**
+ * Creates a Cashfree order for the chosen tier and returns the
+ * payment_session_id the client SDK needs to open hosted checkout. The DB
+ * payment row (status='pending') uses the Cashfree order_id as its primary key
+ * so the webhook / return page can look it up and issue the license.
+ *
+ * Cashfree domestic settlement is in INR, so the order is charged in INR
+ * regardless of the tier's display currency.
+ */
 export async function initiatePayment(tierId: string) {
   const user = await getUser()
   const customer = await getCustomerProfile()
+
+  if (!isCashfreeConfigured()) {
+    throw new Error(
+      'Online payments are not configured yet. Please add your Cashfree API keys.'
+    )
+  }
 
   // Get tier info
   const tierRecord = await db
@@ -154,29 +171,74 @@ export async function initiatePayment(tierId: string) {
 
   const tier = tierRecord[0]
 
-  // Create payment record with pending status
-  const paymentId = crypto.randomUUID()
-  const payment = {
-    id: paymentId,
+  // Cashfree order_id doubles as our payment primary key.
+  const orderId = `LIORD-${crypto.randomBytes(8).toString('hex')}`
+  const chargeCurrency = 'INR'
+
+  await db.insert(payments).values({
+    id: orderId,
     customerId: customer.id,
     tierId,
     amount: tier.price,
-    currency: tier.currency,
-    paymentGateway: 'pending',
+    currency: chargeCurrency,
+    paymentGateway: 'cashfree',
     status: 'pending',
     createdAt: new Date(),
     updatedAt: new Date(),
-  }
+  } as any)
 
-  await db.insert(payments).values(payment as any)
+  const baseUrl = await getBaseUrl()
+  const order = await createCashfreeOrder({
+    orderId,
+    amount: Number(tier.price),
+    currency: chargeCurrency,
+    customerId: customer.id,
+    customerEmail: customer.email || user.email,
+    customerPhone: customer.phone || '',
+    returnUrl: `${baseUrl}/shop/checkout/return`,
+  })
 
   return {
-    paymentId,
+    orderId,
+    paymentSessionId: order.paymentSessionId,
+    mode: cashfreeMode(),
     amount: tier.price,
-    currency: tier.currency,
-    tier: {
-      id: tier.id,
-      name: tier.displayName,
-    },
+    currency: chargeCurrency,
+    tier: { id: tier.id, name: tier.displayName },
+  }
+}
+
+/**
+ * Verifies a Cashfree order server-side and, if paid, issues the license.
+ * Called from the checkout return page. Idempotent.
+ */
+export async function verifyAndFulfillOrder(orderId: string) {
+  const user = await getUser()
+  const customer = await getCustomerProfile()
+
+  // Ensure the order belongs to this customer.
+  const paymentRows = await db
+    .select()
+    .from(payments)
+    .where(eq(payments.id, orderId))
+    .limit(1)
+  if (!paymentRows.length || paymentRows[0].customerId !== customer.id) {
+    throw new Error('Order not found')
+  }
+
+  const { getCashfreeOrderStatus } = await import('@/lib/cashfree')
+  const status = await getCashfreeOrderStatus(orderId)
+
+  if (!status.isPaid) {
+    return { paid: false as const, status: status.orderStatus }
+  }
+
+  const { issueLicenseForPayment } = await import('@/lib/licensing')
+  const license = await issueLicenseForPayment(orderId)
+  return {
+    paid: true as const,
+    status: status.orderStatus,
+    licenseKey: license.licenseKey,
+    licenseId: license.id,
   }
 }
