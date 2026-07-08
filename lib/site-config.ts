@@ -3,7 +3,7 @@
 
 export const SITE = {
   name: 'Lovable Infinity',
-  extensionVersion: 'v6.6.0',
+  extensionVersion: 'v6.7.0',
   extensionDownload: '/lovable-infinity-patched.zip',
   // Update this to your real WhatsApp order link.
   whatsapp: 'https://wa.me/8801000000000',

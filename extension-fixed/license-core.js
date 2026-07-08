@@ -228,6 +228,7 @@
     'license-core.js',
     'local-activation.js',
     'prompt-tracker.js',
+    'automation-runtime.js',
   ]
 
   function getManifestScripts() {

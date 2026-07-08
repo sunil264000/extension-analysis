@@ -3,6 +3,19 @@
 Final security design for the Loveable Infinity extension (Modded bY Sk2).
 Runs entirely on the existing **free Vercel + Neon** setup. No new cost.
 
+> STATUS: IMPLEMENTED (v6.7.0). The step-protocol brain server is live.
+> - Server: `app/api/automation/start` + `app/api/automation/step` (license-checked
+>   per step, AES-256-GCM encrypted packets, rate-limited, session + device bound).
+> - Brain (secret logic): `lib/automation/flows.ts` + `instruction-set.ts` (server-only).
+> - Extension puppet: `extension-fixed/automation-runtime.js` (obfuscated; contains
+>   NO secret logic — only "ask the server what to do next").
+> - Tables: `automation_sessions`, `automation_events`.
+> - Tamper attestation now also requires `automation-runtime.js` to be present.
+>
+> To wire a real feature: call `LIRuntime.runFlow('<flowId>', ctx)` from the
+> content script where the old inline automation used to run, and move that
+> feature's step list into `lib/automation/flows.ts`.
+
 ---
 
 ## Core principle

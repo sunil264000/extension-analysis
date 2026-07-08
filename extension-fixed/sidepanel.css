@@ -101,6 +101,10 @@ body { animation: sp-fade-in .4s cubic-bezier(.16,1,.3,1); }
   text-transform: uppercase;
   box-shadow: 0 0 10px var(--ql-accent-glow);
 }
+.sp-badge-sk2 {
+  background: linear-gradient(90deg, #8b7bfb, #b98bff);
+  box-shadow: 0 0 10px rgba(139, 123, 251, 0.5);
+}
 
 .sp-header-actions {
   display: flex;

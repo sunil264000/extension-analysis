@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Loveable Infinity",
-  "version": "6.6.0",
+  "version": "6.7.0",
   "description": "Loveable Infinity extension with smart automation. Modded bY Sk2.",
   "permissions": [
     "storage",
@@ -68,6 +68,7 @@
         "sounds.js",
         "content-templates.js",
         "content.js",
+        "automation-runtime.js",
         "prompt-tracker.js"
       ],
       "css": [

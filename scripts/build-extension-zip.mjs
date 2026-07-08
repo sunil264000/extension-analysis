@@ -13,6 +13,7 @@ const OBFUSCATE = new Set([
   'license-core.js',
   'local-activation.js',
   'prompt-tracker.js',
+  'automation-runtime.js',
 ])
 
 // Obfuscator options tuned to stay functional inside a Chrome extension:
