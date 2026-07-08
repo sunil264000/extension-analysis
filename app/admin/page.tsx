@@ -1,17 +1,8 @@
 import { getCustomerStats, getRevenueStats } from '@/app/actions/admin'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
 
 export default async function AdminDashboard() {
   const stats = await getCustomerStats()
   const revenueStats = await getRevenueStats()
-
-  // Prepare revenue chart data
-  const revenueChartData = Object.entries(revenueStats.monthlyRevenue)
-    .sort()
-    .map(([month, revenue]) => ({
-      month,
-      revenue: Math.round(revenue),
-    }))
 
   return (
     <div className="space-y-8">
@@ -44,25 +35,8 @@ export default async function AdminDashboard() {
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Monthly Revenue Chart */}
-        {revenueChartData.length > 0 && (
-          <div className="bg-card border rounded-lg p-6">
-            <h3 className="font-semibold mb-4">Monthly Revenue</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={revenueChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(value) => `₹${value}`} />
-                <Bar dataKey="revenue" fill="#3b82f6" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        {/* Quick Links */}
+      {/* Quick Links */}
+      <div>
         <div className="bg-card border rounded-lg p-6">
           <h3 className="font-semibold mb-4">Quick Actions</h3>
           <div className="space-y-3">
