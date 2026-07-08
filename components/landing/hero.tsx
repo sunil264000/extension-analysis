@@ -29,17 +29,23 @@ export function Hero() {
         </p>
 
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Button asChild size="lg" className="bg-brand-gradient text-white hover:opacity-90">
-            <Link href="/shop">
-              Get your license
-              <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
+          <Button
+            render={<Link href="/shop" />}
+            nativeButton={false}
+            size="lg"
+            className="bg-brand-gradient text-white hover:opacity-90"
+          >
+            Get your license
+            <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
-          <Button asChild size="lg" variant="outline">
-            <a href={SITE.extensionDownload} download>
-              <Download className="mr-1 h-4 w-4" />
-              Download extension
-            </a>
+          <Button
+            render={<a href={SITE.extensionDownload} download />}
+            nativeButton={false}
+            size="lg"
+            variant="outline"
+          >
+            <Download className="mr-1 h-4 w-4" />
+            Download extension
           </Button>
         </div>
 

@@ -67,14 +67,15 @@ export function Pricing() {
               </ul>
 
               <Button
-                asChild
+                render={<Link href="/shop" />}
+                nativeButton={false}
                 className={`mt-6 w-full ${
                   plan.featured
                     ? 'bg-brand-gradient text-white hover:opacity-90'
                     : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
                 }`}
               >
-                <Link href="/shop">Buy now</Link>
+                Buy now
               </Button>
             </div>
           ))}

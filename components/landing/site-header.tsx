@@ -40,11 +40,16 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/sign-in">Sign in</Link>
+          <Button render={<Link href="/sign-in" />} nativeButton={false} variant="ghost" size="sm">
+            Sign in
           </Button>
-          <Button asChild size="sm" className="bg-brand-gradient text-white hover:opacity-90">
-            <Link href="/shop">Get a license</Link>
+          <Button
+            render={<Link href="/shop" />}
+            nativeButton={false}
+            size="sm"
+            className="bg-brand-gradient text-white hover:opacity-90"
+          >
+            Get a license
           </Button>
         </div>
 
@@ -72,11 +77,21 @@ export function SiteHeader() {
               </a>
             ))}
             <div className="mt-2 flex flex-col gap-2">
-              <Button asChild variant="outline" size="sm">
-                <Link href="/sign-in">Sign in</Link>
+              <Button
+                render={<Link href="/sign-in" />}
+                nativeButton={false}
+                variant="outline"
+                size="sm"
+              >
+                Sign in
               </Button>
-              <Button asChild size="sm" className="bg-brand-gradient text-white">
-                <Link href="/shop">Get a license</Link>
+              <Button
+                render={<Link href="/shop" />}
+                nativeButton={false}
+                size="sm"
+                className="bg-brand-gradient text-white"
+              >
+                Get a license
               </Button>
             </div>
           </nav>

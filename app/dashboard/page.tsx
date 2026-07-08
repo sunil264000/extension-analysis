@@ -85,8 +85,13 @@ export default function DashboardPage() {
             <span className="hidden text-sm text-muted-foreground sm:inline">
               {customer?.email}
             </span>
-            <Button asChild size="sm" className="bg-brand-gradient text-white hover:opacity-90">
-              <Link href="/shop">Buy license</Link>
+            <Button
+              render={<Link href="/shop" />}
+              nativeButton={false}
+              size="sm"
+              className="bg-brand-gradient text-white hover:opacity-90"
+            >
+              Buy license
             </Button>
             <form action="/api/auth/sign-out" method="POST">
               <Button type="submit" size="sm" variant="outline">
@@ -119,8 +124,8 @@ export default function DashboardPage() {
           <section className="overflow-hidden rounded-2xl border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-6 py-4">
               <h2 className="font-display text-lg font-semibold">Your licenses</h2>
-              <Button asChild size="sm" variant="ghost">
-                <Link href="/shop">Buy more</Link>
+              <Button render={<Link href="/shop" />} nativeButton={false} size="sm" variant="ghost">
+                Buy more
               </Button>
             </div>
             <div className="divide-y divide-border">
@@ -172,8 +177,13 @@ export default function DashboardPage() {
                           )}
                           {copied === `license-${license.id}` ? 'Copied' : 'Copy key'}
                         </Button>
-                        <Button asChild size="sm" variant="ghost">
-                          <Link href={`/dashboard/license/${license.id}`}>Details</Link>
+                        <Button
+                          render={<Link href={`/dashboard/license/${license.id}`} />}
+                          nativeButton={false}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          Details
                         </Button>
                       </div>
                     </div>
