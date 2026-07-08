@@ -1,6 +1,5 @@
 'use server'
 
-import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import {
   licenses,
@@ -10,16 +9,12 @@ import {
   usageTracking,
 } from '@/lib/db/schema'
 import { eq, desc, and, gte, lte } from 'drizzle-orm'
-import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import crypto from 'crypto'
+import { requireAdmin } from '@/lib/auth-helpers'
 
-// Helper to get current user
-async function getUser() {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session?.user) throw new Error('Unauthorized')
-  return session.user
-}
+// Every admin action requires the admin role.
+const getUser = requireAdmin
 
 // License Tiers
 export async function createLicenseTier(data: {

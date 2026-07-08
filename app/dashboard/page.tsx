@@ -6,6 +6,8 @@ import {
   getCustomerProfile,
   getMyLicenses,
   getMyPayments,
+  claimTrialLicense,
+  getIsAdmin,
 } from '@/app/actions/customer'
 import { License, Payment, Customer } from '@/lib/db/schema'
 import {
@@ -18,29 +20,50 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
+function msLeft(expiresAt: Date | string): number {
+  return Math.max(0, new Date(expiresAt).getTime() - Date.now())
+}
+
 function daysLeft(expiresAt: Date | string): number {
-  const ms = new Date(expiresAt).getTime() - Date.now()
-  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)))
+  return Math.max(0, Math.ceil(msLeft(expiresAt) / (1000 * 60 * 60 * 24)))
+}
+
+/** Human label: minutes for <1h, hours for <1d, otherwise days. */
+function timeLeftLabel(expiresAt: Date | string): string {
+  const ms = msLeft(expiresAt)
+  const mins = Math.ceil(ms / (1000 * 60))
+  if (mins <= 0) return 'Expired'
+  if (mins < 60) return `${mins} min left`
+  const hrs = Math.ceil(mins / 60)
+  if (hrs < 24) return `${hrs} hr left`
+  const days = Math.ceil(ms / (1000 * 60 * 60 * 24))
+  return `${days} day${days === 1 ? '' : 's'} left`
 }
 
 export default function DashboardPage() {
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [licenses, setLicenses] = useState<License[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
+  const [isAdminUser, setIsAdminUser] = useState(false)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [customerData, licensesData, paymentsData] = await Promise.all([
-          getCustomerProfile(),
-          getMyLicenses(),
-          getMyPayments(),
-        ])
+        // Ensure the user has their free trial before loading licenses.
+        await claimTrialLicense().catch(() => {})
+        const [customerData, licensesData, paymentsData, adminFlag] =
+          await Promise.all([
+            getCustomerProfile(),
+            getMyLicenses(),
+            getMyPayments(),
+            getIsAdmin().catch(() => false),
+          ])
         setCustomer(customerData)
         setLicenses(licensesData)
         setPayments(paymentsData)
+        setIsAdminUser(adminFlag)
       } catch (error) {
         console.error('Failed to load data:', error)
       } finally {
@@ -85,6 +108,16 @@ export default function DashboardPage() {
             <span className="hidden text-sm text-muted-foreground sm:inline">
               {customer?.email}
             </span>
+            {isAdminUser && (
+              <Button
+                render={<Link href="/admin" />}
+                nativeButton={false}
+                size="sm"
+                variant="outline"
+              >
+                Admin
+              </Button>
+            )}
             <Button
               render={<Link href="/shop" />}
               nativeButton={false}
@@ -131,17 +164,31 @@ export default function DashboardPage() {
             <div className="divide-y divide-border">
               {licenses.length > 0 ? (
                 licenses.map((license) => {
-                  const left = daysLeft(license.expiresAt)
-                  const isActive = license.status === 'active' && left > 0
+                  const ms = msLeft(license.expiresAt)
+                  const isActive = license.status === 'active' && ms > 0
+                  const isTrial = license.tierId === 'trial-15min'
+                  // Progress bar: trials are measured against 15 minutes,
+                  // paid licenses against 30 days.
+                  const totalMs = isTrial
+                    ? 15 * 60 * 1000
+                    : 30 * 24 * 60 * 60 * 1000
+                  const pct = Math.min(100, (ms / totalMs) * 100)
                   return (
                     <div key={license.id} className="p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate font-mono text-sm font-semibold">
-                            {license.licenseKey}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="truncate font-mono text-sm font-semibold">
+                              {license.licenseKey}
+                            </p>
+                            {isTrial && (
+                              <span className="shrink-0 rounded-full border border-brand/40 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand">
+                                Trial
+                              </span>
+                            )}
+                          </div>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Expires {new Date(license.expiresAt).toLocaleDateString()}
+                            Expires {new Date(license.expiresAt).toLocaleString()}
                           </p>
                         </div>
                         <span
@@ -151,7 +198,7 @@ export default function DashboardPage() {
                               : 'border-destructive/40 bg-destructive/10 text-destructive'
                           }`}
                         >
-                          {isActive ? `${left} days left` : 'Expired'}
+                          {isActive ? timeLeftLabel(license.expiresAt) : 'Expired'}
                         </span>
                       </div>
 
@@ -159,7 +206,7 @@ export default function DashboardPage() {
                         <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
                           <div
                             className="h-full rounded-full bg-brand-gradient"
-                            style={{ width: `${Math.min(100, (left / 30) * 100)}%` }}
+                            style={{ width: `${pct}%` }}
                           />
                         </div>
                       )}

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
+import { getUserRole } from '@/lib/auth-helpers'
 
 export default async function AdminLayout({
   children,
@@ -11,6 +12,12 @@ export default async function AdminLayout({
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) {
     redirect('/sign-in')
+  }
+
+  // Only admins may access the admin panel.
+  const role = await getUserRole(session.user.id)
+  if (role !== 'admin') {
+    redirect('/dashboard')
   }
 
   const navItems = [

@@ -6,11 +6,30 @@ import { licenses, customers, licenseTiers, payments } from '@/lib/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import crypto from 'crypto'
+import { grantTrialLicense, getUserRole } from '@/lib/auth-helpers'
 
 async function getUser() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
   return session.user
+}
+
+/**
+ * Grants the one-time free 15-minute trial to the current user if they have
+ * never had one. Safe to call repeatedly (idempotent). Used as a safety net on
+ * dashboard load for accounts created before the signup hook, or if that hook
+ * failed to fire.
+ */
+export async function claimTrialLicense() {
+  const user = await getUser()
+  const created = await grantTrialLicense(user.id, user.email)
+  return { granted: Boolean(created) }
+}
+
+/** Whether the current user is an admin — used to show the admin link. */
+export async function getIsAdmin() {
+  const user = await getUser()
+  return (await getUserRole(user.id)) === 'admin'
 }
 
 export async function getCustomerProfile() {

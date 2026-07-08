@@ -20,6 +20,21 @@ export const auth = betterAuth({
     enabled: true,
     autoSignIn: true,
   },
+  databaseHooks: {
+    user: {
+      create: {
+        // After every new signup, grant a one-time free 15-minute trial license.
+        after: async (createdUser) => {
+          try {
+            const { grantTrialLicense } = await import('@/lib/auth-helpers')
+            await grantTrialLicense(createdUser.id, createdUser.email)
+          } catch (err) {
+            console.error('[v0] Failed to grant trial license on signup:', err)
+          }
+        },
+      },
+    },
+  },
   // Be permissive about origins so auth works in the v0 preview, on
   // localhost, and on any Vercel deployment without manual configuration.
   trustedOrigins: [

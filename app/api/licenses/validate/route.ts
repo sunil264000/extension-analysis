@@ -139,9 +139,18 @@ export async function POST(request: NextRequest) {
       .set({ lastValidatedAt: now })
       .where(eq(licenses.id, license.id))
 
-    // Compute remaining duration (whole days, rounded up, min 0)
-    const msRemaining = license.expiresAt.getTime() - now.getTime()
+    // Compute remaining duration. Trials are measured in minutes, so expose
+    // minute-level precision as well as the whole-day figure.
+    const msRemaining = Math.max(0, license.expiresAt.getTime() - now.getTime())
+    const minutesRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60)))
     const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)))
+    // Human-friendly label the extension can show directly.
+    const timeRemainingLabel =
+      minutesRemaining < 60
+        ? `${minutesRemaining} min`
+        : minutesRemaining < 60 * 24
+          ? `${Math.ceil(minutesRemaining / 60)} hr`
+          : `${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`
 
     return json({
       valid: true,
@@ -150,6 +159,8 @@ export async function POST(request: NextRequest) {
       planName: tier?.displayName ?? 'Pro',
       expiresAt: license.expiresAt.toISOString(),
       daysRemaining,
+      minutesRemaining,
+      timeRemainingLabel,
       seatsUsed: deviceFound ? license.seatsUsed : boundDevices.length + 1,
       maxSeats,
       license: {
@@ -166,6 +177,7 @@ export async function POST(request: NextRequest) {
           : undefined,
         expiresAt: license.expiresAt.toISOString(),
         daysRemaining,
+        minutesRemaining,
         seatsUsed: license.seatsUsed,
         usageCount: license.usageCount,
         status: license.status,
