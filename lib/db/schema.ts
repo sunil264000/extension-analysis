@@ -202,7 +202,61 @@ export const promptEvents = pgTable(
   ]
 )
 
+// ========== Automation "Brain Server" Tables ==========
+// These power the anti-piracy step protocol: the extension is a dumb puppet
+// that fetches one declarative action at a time from the server. A session is
+// created only for a valid, non-revoked, device-bound license.
+
+export const automationSessions = pgTable(
+  'automation_sessions',
+  {
+    id: text('id').primaryKey(),
+    licenseId: text('licenseId').notNull(),
+    licenseKey: text('licenseKey').notNull(),
+    hardwareFingerprint: text('hardwareFingerprint').notNull(),
+    flowId: text('flowId').notNull(),
+    // Ephemeral AES-GCM key (base64) used to encrypt step packets. Lives only
+    // for the session lifetime; never shipped inside the extension bundle.
+    sessionKey: text('sessionKey').notNull(),
+    cursor: integer('cursor').notNull().default(0), // next step index expected
+    totalSteps: integer('totalSteps').notNull().default(0),
+    status: text('status').notNull().default('active'), // active | done | aborted | expired
+    stepCount: integer('stepCount').notNull().default(0), // steps actually served
+    ipAddress: text('ipAddress'),
+    userAgent: text('userAgent'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    expiresAt: timestamp('expiresAt').notNull(),
+    lastStepAt: timestamp('lastStepAt'),
+  },
+  (table) => [
+    index('idx_automation_sessions_licenseId').on(table.licenseId),
+    index('idx_automation_sessions_status').on(table.status),
+    index('idx_automation_sessions_createdAt').on(table.createdAt),
+  ]
+)
+
+export const automationEvents = pgTable(
+  'automation_events',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('sessionId').notNull(),
+    licenseId: text('licenseId').notNull(),
+    flowId: text('flowId').notNull(),
+    step: integer('step').notNull(),
+    action: text('action').notNull(),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_automation_events_sessionId').on(table.sessionId),
+    index('idx_automation_events_licenseId').on(table.licenseId),
+    index('idx_automation_events_createdAt').on(table.createdAt),
+  ]
+)
+
 // ========== Type Exports ==========
+export type AutomationSession = typeof automationSessions.$inferSelect
+export type AutomationEvent = typeof automationEvents.$inferSelect
+
 
 export type User = typeof user.$inferSelect
 export type LicenseTier = typeof licenseTiers.$inferSelect
