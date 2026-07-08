@@ -1,0 +1,118 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { licenses, licenseTiers } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm'
+import { signLicenseToken } from '@/lib/license-signing'
+import { entitlementsForTier } from '@/lib/automation/features'
+
+// The extension calls this cross-origin from lovable.dev.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Max-Age': '86400',
+}
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: CORS_HEADERS })
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
+
+interface AuthorizeRequest {
+  licenseKey: string
+  hardwareFingerprint: string
+}
+
+/**
+ * Feature-entitlement authorization.
+ *
+ * This is the chokepoint the extension's UI gate depends on. It re-checks the
+ * license on every launch/heartbeat and returns a SIGNED, short-lived
+ * entitlement token that lists the features this license is allowed to use.
+ * Because the token is signed with the server private key and bound to the
+ * device fingerprint, the extension can verify it but cannot forge or extend
+ * it. Revoking (tamper/kill-switch), expiry, wrong device, or a missing seat
+ * all cause this to fail → the whole feature panel locks.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = (await request.json()) as AuthorizeRequest
+    const licenseKey = (body.licenseKey || '').trim()
+    const fp = (body.hardwareFingerprint || '').trim()
+
+    if (!licenseKey || !fp) {
+      return json({ ok: false, reason: 'INVALID_REQUEST' }, 400)
+    }
+
+    const rows = await db
+      .select()
+      .from(licenses)
+      .where(eq(licenses.licenseKey, licenseKey))
+      .limit(1)
+
+    if (!rows.length) {
+      return json({ ok: false, reason: 'NOT_FOUND' }, 404)
+    }
+
+    const license = rows[0]
+
+    // Revoked (incl. tamper kill-switch), suspended, etc.
+    if (license.status !== 'active') {
+      return json({ ok: false, reason: license.status.toUpperCase() }, 403)
+    }
+
+    // Expiry.
+    const now = new Date()
+    if (license.expiresAt < now) {
+      await db.update(licenses).set({ status: 'expired' }).where(eq(licenses.id, license.id))
+      return json({ ok: false, reason: 'EXPIRED' }, 403)
+    }
+
+    // Device binding — the fingerprint must already be bound to this license.
+    // (Binding/registration happens in /validate; authorize only trusts bound
+    // devices so a stolen key on a new machine gets nothing here.)
+    const boundDevices = license.hardwareFingerprints || []
+    if (!boundDevices.includes(fp)) {
+      return json({ ok: false, reason: 'DEVICE_NOT_BOUND' }, 403)
+    }
+
+    // Tier + entitlements.
+    const tierRows = await db
+      .select()
+      .from(licenseTiers)
+      .where(eq(licenseTiers.id, license.tierId))
+      .limit(1)
+    const tier = tierRows[0]
+    const planName = tier?.displayName ?? 'Pro'
+    const features = entitlementsForTier(license.tierId)
+
+    // Signed, short-lived (15 min) entitlement token bound to this device.
+    const { token, payload } = signLicenseToken({
+      k: license.licenseKey,
+      fp,
+      plan: planName,
+      status: 'active',
+      exp: license.expiresAt.getTime(),
+      tier: license.tierId,
+      feat: features,
+      ttlMs: 15 * 60 * 1000,
+    })
+
+    return json({
+      ok: true,
+      token,
+      planName,
+      tier: license.tierId,
+      features,
+      expiresAt: license.expiresAt.toISOString(),
+      // client should re-authorize within this many ms
+      refreshInMs: payload.ttl,
+    })
+  } catch (err) {
+    console.error('[authorize] error', err)
+    return json({ ok: false, reason: 'SERVER_ERROR' }, 500)
+  }
+}

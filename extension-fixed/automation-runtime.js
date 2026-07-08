@@ -232,10 +232,56 @@
     })
   }
 
+  var PROMPT_PATH = '/api/automation/prompt'
+
+  // Current server-authorized entitlements, published by local-activation.js
+  // into window.__LI_ENT after each authorize. Read-only view for the UI.
+  function getEntitlements() {
+    var e =
+      (typeof window !== 'undefined' && window.__LI_ENT) ||
+      (typeof self !== 'undefined' && self.__LI_ENT) ||
+      (typeof globalThis !== 'undefined' && globalThis.__LI_ENT) ||
+      null
+    return e && e.ok ? e : { ok: false, features: [] }
+  }
+
+  // Is this feature allowed for the current license? Used to enable/disable or
+  // hide UI buttons without trusting the client — the server still re-checks on
+  // every prompt/flow request, so this is only a UX convenience.
+  function isEntitled(featureId) {
+    var e = getEntitlements()
+    return !!(e.ok && e.features && e.features.indexOf(featureId) !== -1)
+  }
+
+  // Fetch a license-gated prompt for one of the quick-action buttons. The prompt
+  // text lives ONLY on the server and is returned only to a valid, device-bound,
+  // entitled license. Resolves { ok, prompt } or { ok:false, reason }.
+  function getPrompt(featureId) {
+    return storageGet([STORAGE_KEY_LICENSE_KEY, STORAGE_KEY_FINGERPRINT]).then(function (res) {
+      var key = res[STORAGE_KEY_LICENSE_KEY]
+      var fp = res[STORAGE_KEY_FINGERPRINT]
+      if (!key || !fp) return { ok: false, reason: 'NOT_ACTIVATED' }
+      return fetch(API_BASE + PROMPT_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ licenseKey: key, hardwareFingerprint: fp, featureId: featureId }),
+      })
+        .then(function (r) { return r.json() })
+        .then(function (j) {
+          if (!j || !j.ok) return { ok: false, reason: (j && j.reason) || 'DENIED' }
+          return { ok: true, featureId: j.featureId, label: j.label, prompt: j.prompt }
+        })
+        .catch(function () { return { ok: false, reason: 'NETWORK' } })
+    })
+  }
+
   // Public surface used by the extension UI / content bridge.
   var RUNTIME = {
     runFlow: runFlow,
     executeAction: executeAction, // exposed for isolated testing only
+    getEntitlements: getEntitlements,
+    isEntitled: isEntitled,
+    getPrompt: getPrompt,
   }
   if (typeof window !== 'undefined') window.LIRuntime = RUNTIME
   if (typeof self !== 'undefined') self.LIRuntime = RUNTIME

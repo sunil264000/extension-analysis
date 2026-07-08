@@ -44,14 +44,16 @@
   var LICENSE_API_BASE = (LICORE && LICORE.API_BASE) || "https://extension-analysis.vercel.app";
   var OWNER_TAG = (LICORE && LICORE.OWNER_TAG) || "Modded bY Sk2";
 
-  var VALIDATE_PATH = "/api/licenses/validate";
-  var TRACK_PATH    = "/api/licenses/track-usage";
-  var SHOP_PATH     = "/shop";
+  var VALIDATE_PATH  = "/api/licenses/validate";
+  var AUTHORIZE_PATH = "/api/licenses/authorize"; // feature entitlement chokepoint
+  var TRACK_PATH     = "/api/licenses/track-usage";
+  var SHOP_PATH      = "/shop";
 
   var STORAGE_KEY_LICENSE_KEY = "li_license_key";     // the raw key the user entered
   var STORAGE_KEY_CACHE       = "li_validation_cache"; // last validation result + timestamp
   var STORAGE_KEY_FINGERPRINT = "li_hw_fingerprint";
   var STORAGE_KEY_TOKEN       = "li_signed_token";    // signed, verifiable proof of validity
+  var STORAGE_KEY_ENT         = "li_entitlements";    // signed entitlement token + feature list
 
   var REVALIDATE_INTERVAL_MS  = 60 * 60 * 1000;  // re-check with server every 1h
   var HEARTBEAT_INTERVAL_MS   = 5 * 60 * 1000;   // local expiry check every 5m
@@ -278,11 +280,18 @@
   }
 
   function clearValidation() {
+    // Also drop the exposed entitlements so no feature sees a stale allow-list.
+    try {
+      var empty = { ok: false, features: [], at: Date.now(), owner: OWNER_TAG };
+      if (typeof window !== "undefined") window.__LI_ENT = empty;
+      if (typeof self !== "undefined") self.__LI_ENT = empty;
+      if (typeof globalThis !== "undefined") globalThis.__LI_ENT = empty;
+    } catch (e) {}
     return storageRemove([
       "ql_license_valid", "ql_license_status", "ql_license_key", "ql_license_data",
       "ql_user_name", "ql_expires_at", "ql_activated_at", "ql_session_id",
       "license_key", "plan", "lovable_license_data",
-      STORAGE_KEY_CACHE, STORAGE_KEY_TOKEN,
+      STORAGE_KEY_CACHE, STORAGE_KEY_TOKEN, STORAGE_KEY_ENT,
     ]);
   }
 
@@ -417,17 +426,27 @@
           setBusy(true);
           msg.textContent = ""; msg.className = "li-gate-msg";
           validateOnline(key).then(function (result) {
-            if (result.valid) {
+            if (!result.valid) {
+              setBusy(false);
+              msg.textContent = result.message || "Invalid license key.";
+              msg.className = "li-gate-msg li-gate-msg-error";
+              return;
+            }
+            // License is valid — now require the server to authorize feature
+            // entitlements for this device before we declare success.
+            return authorizeFeatures(key).then(function (ent) {
+              if (!ent.ok && !ent.networkError) {
+                setBusy(false);
+                msg.textContent = "License authorization failed (" + (ent.reason || "denied") + ").";
+                msg.className = "li-gate-msg li-gate-msg-error";
+                return;
+              }
               return persistValidation(key, result).then(function () {
                 msg.textContent = "Activated! Loading…";
                 msg.className = "li-gate-msg li-gate-msg-ok";
                 setTimeout(function () { try { location.reload(); } catch (e) { removeGate(); } }, 500);
               });
-            } else {
-              setBusy(false);
-              msg.textContent = result.message || "Invalid license key.";
-              msg.className = "li-gate-msg li-gate-msg-error";
-            }
+            });
           });
         }
         if (btn) btn.addEventListener("click", submit);
@@ -474,6 +493,83 @@
   // ==========================================================================
   //  STARTUP DECISION
   // ==========================================================================
+  // ==========================================================================
+  //  FEATURE ENTITLEMENTS  (server-authorized, per launch + heartbeat)
+  //  The whole feature panel depends on a fresh, SIGNED entitlement from the
+  //  server. The token is verified against the embedded public key and bound to
+  //  this device, so it can't be forged or replayed on another machine. Revoke
+  //  / expiry / wrong-device / missing-seat all cause this to fail → the gate
+  //  closes. This is the chokepoint that makes every feature server-gated
+  //  without touching the (obfuscated) feature bundles.
+  // ==========================================================================
+  function publishEntitlements(ent) {
+    // Expose to the rest of the extension in a tamper-checked global. Other
+    // scripts (and the automation runtime) read window.__LI_ENT.features.
+    try {
+      var stamp = {
+        ok: !!(ent && ent.ok),
+        features: (ent && ent.features) || [],
+        tier: ent && ent.tier,
+        plan: ent && ent.plan,
+        at: Date.now(),
+        owner: OWNER_TAG,
+      };
+      if (typeof window !== "undefined") window.__LI_ENT = stamp;
+      if (typeof self !== "undefined") self.__LI_ENT = stamp;
+      if (typeof globalThis !== "undefined") globalThis.__LI_ENT = stamp;
+    } catch (e) {}
+  }
+
+  // Calls the server, verifies the signed entitlement token, persists + exposes
+  // the feature list. Resolves { ok, features, reason }.
+  function authorizeFeatures(key) {
+    return getFingerprint().then(function (fp) {
+      return fetch(LICENSE_API_BASE + AUTHORIZE_PATH, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ licenseKey: key, hardwareFingerprint: fp }),
+      })
+        .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+        .then(function (res) {
+          var j = res.body || {};
+          if (!j.ok || !j.token) {
+            return { ok: false, reason: (j.reason || "AUTHORIZE_FAILED"), networkError: false };
+          }
+          // The entitlement token MUST cryptographically verify for THIS device.
+          if (!LICORE || typeof LICORE.verifyToken !== "function") {
+            return { ok: false, reason: "NO_CORE", networkError: false };
+          }
+          return LICORE.verifyToken(j.token, fp).then(function (v) {
+            if (!v.ok) return { ok: false, reason: "ENT_" + v.reason, networkError: false };
+            // Trust the signed feature list inside the token over the plain body.
+            var feats = (v.payload && v.payload.feat) || j.features || [];
+            var ent = { ok: true, features: feats, tier: (v.payload && v.payload.tier) || j.tier, plan: j.planName, token: j.token };
+            publishEntitlements(ent);
+            return storageSet((function () { var o = {}; o[STORAGE_KEY_ENT] = { token: j.token, features: feats, tier: ent.tier, plan: ent.plan, at: Date.now() }; return o; })())
+              .then(function () { return ent; });
+          });
+        })
+        .catch(function () {
+          // Network failure: fall back to a previously stored, still-verifiable
+          // entitlement token so a briefly-offline paid user isn't kicked.
+          return storageGet(STORAGE_KEY_ENT).then(function (res) {
+            var cached = res[STORAGE_KEY_ENT];
+            if (!cached || !cached.token || !LICORE || !LICORE.verifyToken) {
+              return { ok: false, reason: "NETWORK", networkError: true };
+            }
+            return getFingerprint().then(function (fp2) {
+              return LICORE.verifyToken(cached.token, fp2).then(function (v) {
+                if (!v.ok) return { ok: false, reason: "NETWORK", networkError: true };
+                var ent = { ok: true, features: (v.payload && v.payload.feat) || cached.features || [], tier: cached.tier, plan: cached.plan, offline: true };
+                publishEntitlements(ent);
+                return ent;
+              });
+            });
+          });
+        });
+    });
+  }
+
   function boot() {
     setBeacon();
     // Attestation runs FIRST. If the security scripts / manifest were tampered
@@ -485,6 +581,28 @@
         });
       }
       return bootInner();
+    });
+  }
+
+  // Runs the server entitlement authorization, and ONLY unlocks the panel if it
+  // succeeds (or we're offline but hold a still-verifiable cached entitlement).
+  // This is the final gate that ties every feature to a live server decision.
+  function unlockWithEntitlements(key, validation) {
+    return authorizeFeatures(key).then(function (ent) {
+      if (ent.ok) {
+        return persistValidation(key, validation);
+      }
+      if (ent.networkError) {
+        // Offline grace: the signed LICENSE token already verified upstream, so
+        // allow the session; entitlements will refresh on the next heartbeat.
+        return persistValidation(key, validation);
+      }
+      // Server actively refused (revoked / expired / wrong device / no seat).
+      var msg = ent.reason === "EXPIRED" ? "Your plan has expired. Renew to continue."
+        : ent.reason === "DEVICE_NOT_BOUND" ? "This device is not authorized for your license."
+        : ent.reason === "REVOKED" ? "This license has been revoked."
+        : "License authorization failed. Please re-activate.";
+      return clearValidation().then(function () { showGate({ prefill: key, message: msg }); });
     });
   }
 
@@ -501,11 +619,12 @@
       // FAST PATH — unlock only if the STORED SIGNED TOKEN verifies against the
       // embedded public key for THIS device and is not expired. Client-edited
       // cache/expiry can no longer force an unlock: without a valid signature
-      // this branch is skipped entirely.
+      // this branch is skipped entirely. Even on the fast path we still require
+      // a fresh server entitlement authorization before opening the panel.
       return verifyStoredToken().then(function (v) {
         var age = (cache && cache.validatedAt) ? (Date.now() - Date.parse(cache.validatedAt)) : Infinity;
         if (v.ok && age < REVALIDATE_INTERVAL_MS) {
-          return persistValidation(key, {
+          return unlockWithEntitlements(key, {
             valid: true,
             expiresAt: cache && cache.expiresAt,
             daysRemaining: cache && cache.daysRemaining,
@@ -517,12 +636,12 @@
         // Otherwise do a real online check now.
         return validateOnline(key).then(function (result) {
           if (result.valid) {
-            return persistValidation(key, result);
+            return unlockWithEntitlements(key, result);
           }
           // Offline: allow the session ONLY if the signed token still verifies
           // (its expiry is inside the signature, so this is tamper-proof).
           if (result.networkError && v.ok) {
-            return persistValidation(key, {
+            return unlockWithEntitlements(key, {
               valid: true,
               expiresAt: cache && cache.expiresAt,
               daysRemaining: cache && cache.daysRemaining,
@@ -589,7 +708,18 @@
                     : "License verification failed. Please re-activate.";
                   showGate({ prefill: key, message: msg });
                 });
+                return;
               }
+              // 3) Re-authorize feature entitlements with the server. If the
+              //    server now refuses (revoked mid-session, seat removed, tier
+              //    downgraded), lock the panel immediately.
+              authorizeFeatures(key).then(function (ent) {
+                if (!ent.ok && !ent.networkError) {
+                  clearValidation().then(function () {
+                    showGate({ prefill: key, message: "Your license authorization was revoked." });
+                  });
+                }
+              });
             });
           });
         });

@@ -54,6 +54,8 @@ export interface LicenseTokenPayload {
   exp: number // hard expiry (ms epoch) — matches the license expiry
   ttl: number // token freshness window (ms) the client should re-check within
   nonce: string // random, anti-replay
+  tier?: string // tier id (entitlement scoping)
+  feat?: string[] // enabled feature ids for this tier (entitlements)
 }
 
 /**
@@ -72,6 +74,8 @@ export function signLicenseToken(
     exp: input.exp,
     ttl: input.ttlMs ?? 6 * 60 * 60 * 1000, // 6h default re-check window
     nonce: crypto.randomBytes(12).toString('hex'),
+    ...(input.tier ? { tier: input.tier } : {}),
+    ...(input.feat ? { feat: input.feat } : {}),
   }
 
   const payloadSeg = base64url(Buffer.from(JSON.stringify(payload), 'utf8'))
