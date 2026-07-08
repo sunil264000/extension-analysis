@@ -82,6 +82,70 @@ export async function updateLicenseStatus(licenseId: string, status: string) {
     .set({ status, updatedAt: new Date() })
     .where(eq(licenses.id, licenseId))
   revalidatePath('/admin/licenses')
+  revalidatePath(`/admin/licenses/${licenseId}`)
+}
+
+/** Full license record joined with its customer and tier, for the detail page. */
+export async function getLicenseWithRelations(licenseId: string) {
+  await getUser()
+  const [license] = await db
+    .select()
+    .from(licenses)
+    .where(eq(licenses.id, licenseId))
+    .limit(1)
+  if (!license) return null
+
+  const [customer] = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.id, license.customerId))
+    .limit(1)
+
+  const [tier] = await db
+    .select()
+    .from(licenseTiers)
+    .where(eq(licenseTiers.id, license.tierId))
+    .limit(1)
+
+  return {
+    license,
+    customer: customer ?? null,
+    tier: tier ?? null,
+  }
+}
+
+/** Extends an active license by a number of days from its current expiry. */
+export async function extendLicense(licenseId: string, extraDays: number) {
+  await getUser()
+  const [license] = await db
+    .select()
+    .from(licenses)
+    .where(eq(licenses.id, licenseId))
+    .limit(1)
+  if (!license) throw new Error('License not found')
+
+  const base = new Date(
+    Math.max(new Date(license.expiresAt).getTime(), Date.now())
+  )
+  const newExpiry = new Date(base.getTime() + extraDays * 24 * 60 * 60 * 1000)
+
+  await db
+    .update(licenses)
+    .set({ expiresAt: newExpiry, status: 'active', updatedAt: new Date() })
+    .where(eq(licenses.id, licenseId))
+  revalidatePath(`/admin/licenses/${licenseId}`)
+  revalidatePath('/admin/licenses')
+  return newExpiry
+}
+
+/** Returns just active tiers for the admin creation form. */
+export async function getActiveTiersForAdmin() {
+  await getUser()
+  return db
+    .select()
+    .from(licenseTiers)
+    .where(eq(licenseTiers.isActive, true))
+    .orderBy(licenseTiers.price)
 }
 
 // Customers
@@ -188,46 +252,67 @@ export async function getRevenueStats() {
   }
 }
 
-// Manual License Creation (for admin)
+// Manual License Creation (for admin). Duration is derived from the chosen
+// tier so there is a single source of truth. An optional override lets an admin
+// issue a custom-length key when needed.
 export async function createManualLicense(data: {
   customerId: string
   tierId: string
-  durationDays: number
+  durationDaysOverride?: number
 }) {
   await getUser()
 
-  const licenseKey = `LI-${crypto
-    .randomBytes(4)
-    .toString('hex')
-    .toUpperCase()}-${crypto
-    .randomBytes(2)
-    .toString('hex')
-    .toUpperCase()}-${crypto
-    .randomBytes(2)
-    .toString('hex')
-    .toUpperCase()}-${crypto
-    .randomBytes(2)
-    .toString('hex')
-    .toUpperCase()}`
+  // Resolve the customer so we can bind the license to the right userId.
+  const customerRows = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.id, data.customerId))
+    .limit(1)
+  if (!customerRows.length) throw new Error('Customer not found')
+  const customer = customerRows[0]
 
-  const expiryDate = new Date()
-  expiryDate.setDate(expiryDate.getDate() + data.durationDays)
+  // Resolve the tier for its duration.
+  const tierRows = await db
+    .select()
+    .from(licenseTiers)
+    .where(eq(licenseTiers.id, data.tierId))
+    .limit(1)
+  if (!tierRows.length) throw new Error('Tier not found')
+  const tier = tierRows[0]
+
+  const durationDays = data.durationDaysOverride ?? tier.durationDays
+
+  const seg = (n: number) => crypto.randomBytes(n).toString('hex').toUpperCase()
+  const licenseKey = `LI-${seg(4)}-${seg(2)}-${seg(2)}-${seg(2)}`
+
+  const now = new Date()
+  const expiryDate = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000)
 
   const licenseId = crypto.randomUUID()
   const license = {
     id: licenseId,
     licenseKey,
     tierId: data.tierId,
-    customerId: data.customerId,
-    userId: data.customerId,
+    customerId: customer.id,
+    userId: customer.userId,
     status: 'active',
     expiresAt: expiryDate,
-    issuedAt: new Date(),
+    issuedAt: now,
+    hardwareFingerprints: [],
     seatsUsed: 0,
     usageCount: 0,
+    createdAt: now,
+    updatedAt: now,
   }
 
   await db.insert(licenses).values(license as any)
+
+  // Keep the customer's license count in sync.
+  await db
+    .update(customers)
+    .set({ licenseCount: (customer.licenseCount ?? 0) + 1, updatedAt: now })
+    .where(eq(customers.id, customer.id))
+
   revalidatePath('/admin/licenses')
   return license
 }

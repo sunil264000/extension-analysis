@@ -107,7 +107,7 @@ export default function DashboardPage() {
               <InfinityIcon className="h-5 w-5 text-white" strokeWidth={2.5} />
             </span>
             <span className="font-display text-lg font-bold tracking-tight">
-              Lovable <span className="text-gradient">Infinity</span>
+              Unlimited <span className="text-gradient">Lovable</span>
             </span>
           </Link>
           <div className="flex items-center gap-3">

@@ -51,7 +51,7 @@ export function SiteFooter() {
             <InfinityIcon className="h-4 w-4 text-white" strokeWidth={2.5} />
           </span>
           <span className="font-display text-sm font-bold">
-            Lovable <span className="text-gradient">Infinity</span>
+            Unlimited <span className="text-gradient">Lovable</span>
           </span>
           <span className="ml-2 text-xs text-muted-foreground">{SITE.extensionVersion}</span>
         </div>

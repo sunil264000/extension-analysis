@@ -38,7 +38,7 @@ export function Features() {
     <section id="features" className="border-t border-border/60 py-20 md:py-28">
       <div className="mx-auto max-w-6xl px-4">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-widest text-brand">Why Infinity</p>
+          <p className="text-sm font-semibold uppercase tracking-widest text-brand">Why Unlimited Lovable</p>
           <h2 className="mt-3 text-balance font-display text-3xl font-bold md:text-4xl">
             Building on Lovable now means stress-free
           </h2>

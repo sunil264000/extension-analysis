@@ -32,13 +32,18 @@ export type PlanTier = {
   featured?: boolean
 }
 
-// Mirrors the seeded license tiers. Keep in sync with the shop / admin.
-// Charged in INR via Cashfree, so we display the rupee symbol.
+// Mirrors the seeded license tiers (license_tiers). Keep in sync with the shop
+// / admin. Charged in INR via Cashfree, so we display the rupee symbol.
 export const PLANS: PlanTier[] = [
-  { id: '3d', name: '3 Days License', emoji: '📅', days: '3 days of full access', price: 150, currency: '₹' },
-  { id: '7d', name: '7 Days License', emoji: '🗓️', days: '7 days of full access', price: 300, currency: '₹' },
-  { id: '15d', name: '15 Days License', emoji: '📆', days: '15 days of full access', price: 700, currency: '₹' },
-  { id: '1m', name: '1 Month License', emoji: '👑', days: '30 days of full access', price: 1200, currency: '₹', featured: true },
+  { id: 'tier-1d', name: '1 Day License', emoji: '📅', days: '1 day of full access', price: 110, currency: '₹' },
+  { id: 'tier-7d', name: '1 Week License', emoji: '🗓️', days: '7 days of full access', price: 650, currency: '₹' },
+  { id: 'tier-1m', name: '1 Month License', emoji: '📆', days: '30 days of full access', price: 2199, currency: '₹' },
+  { id: 'tier-1y', name: '1 Year License', emoji: '👑', days: '365 days of full access', price: 15000, currency: '₹', featured: true },
 ]
 
-export const PLAN_FEATURES = ['Full access', 'Instant delivery', 'Auto-renew reminders', '24/7 support']
+export const PLAN_FEATURES = [
+  'Unlimited prompts on lovable.dev',
+  'All 9 AI power tools',
+  'Instant key delivery',
+  'Priority support',
+]

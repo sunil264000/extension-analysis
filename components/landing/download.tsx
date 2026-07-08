@@ -37,7 +37,7 @@ export function DownloadSection() {
             </div>
 
             <h3 className="mt-6 font-display text-2xl font-bold">
-              Lovable <span className="text-gradient">Infinity</span>
+              Unlimited <span className="text-gradient">Lovable</span>
             </h3>
             <p className="mt-2 text-sm text-muted-foreground">
               Signed, tamper-hardened Chrome extension package.

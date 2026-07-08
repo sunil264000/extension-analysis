@@ -52,7 +52,7 @@ export function Pricing() {
                 <span className="text-xs text-muted-foreground">Only</span>
                 <div className="font-display text-4xl font-extrabold">
                   {plan.currency}
-                  {plan.price}
+                  {plan.price.toLocaleString('en-IN')}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">{plan.days}</p>
               </div>
