@@ -8,6 +8,7 @@ import {
   licenseTiers,
   payments,
   promptEvents,
+  licenseActivations,
 } from '@/lib/db/schema'
 import { eq, desc, and, gte, sql } from 'drizzle-orm'
 import { headers } from 'next/headers'
@@ -209,7 +210,30 @@ export async function getMyPayments() {
     .orderBy(desc(payments.createdAt))
 }
 
-export async function getLicenseDetails(licenseId: string) {
+export type LicenseDetail = {
+  license: typeof licenses.$inferSelect
+  tier: typeof licenseTiers.$inferSelect | null
+  devices: {
+    id: string
+    hardwareFingerprint: string
+    activatedAt: string
+    lastUsedAt: string | null
+    isActive: boolean
+  }[]
+  usage: {
+    totalPrompts: number
+    promptsToday: number
+    flagged: number
+    daily: { date: string; prompts: number }[]
+  }
+}
+
+/**
+ * Full detail for a single license the current user owns: tier, bound devices,
+ * and prompt-usage aggregates scoped to that license. Throws if the license
+ * does not belong to the caller.
+ */
+export async function getLicenseDetails(licenseId: string): Promise<LicenseDetail> {
   const user = await getUser()
   const licenseRecord = await db
     .select()
@@ -226,7 +250,70 @@ export async function getLicenseDetails(licenseId: string) {
     throw new Error('Unauthorized')
   }
 
-  return license
+  const tierRecord = await db
+    .select()
+    .from(licenseTiers)
+    .where(eq(licenseTiers.id, license.tierId))
+    .limit(1)
+  const tier = tierRecord?.[0] ?? null
+
+  const devices = await db
+    .select()
+    .from(licenseActivations)
+    .where(eq(licenseActivations.licenseId, license.id))
+    .orderBy(desc(licenseActivations.activatedAt))
+
+  // Per-license usage for the last 14 days.
+  const since = new Date()
+  since.setHours(0, 0, 0, 0)
+  since.setDate(since.getDate() - 13)
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+
+  const dailyRows = await db
+    .select({
+      day: sql<string>`to_char(${promptEvents.createdAt}, 'YYYY-MM-DD')`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(promptEvents)
+    .where(and(eq(promptEvents.licenseId, license.id), gte(promptEvents.createdAt, since)))
+    .groupBy(sql`to_char(${promptEvents.createdAt}, 'YYYY-MM-DD')`)
+
+  const byDay = new Map(dailyRows.map((r) => [r.day, Number(r.count)]))
+  const daily: { date: string; prompts: number }[] = []
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(since)
+    d.setDate(since.getDate() + i)
+    const key = d.toISOString().slice(0, 10)
+    daily.push({ date: key, prompts: byDay.get(key) ?? 0 })
+  }
+
+  const [totals] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      today: sql<number>`count(*) filter (where ${promptEvents.createdAt} >= ${startOfToday.toISOString()})::int`,
+      flagged: sql<number>`count(*) filter (where ${promptEvents.flagged})::int`,
+    })
+    .from(promptEvents)
+    .where(eq(promptEvents.licenseId, license.id))
+
+  return {
+    license,
+    tier,
+    devices: devices.map((d) => ({
+      id: d.id,
+      hardwareFingerprint: d.hardwareFingerprint,
+      activatedAt: new Date(d.activatedAt).toISOString(),
+      lastUsedAt: d.lastUsedAt ? new Date(d.lastUsedAt).toISOString() : null,
+      isActive: d.isActive,
+    })),
+    usage: {
+      totalPrompts: Number(totals?.total ?? 0),
+      promptsToday: Number(totals?.today ?? 0),
+      flagged: Number(totals?.flagged ?? 0),
+      daily,
+    },
+  }
 }
 
 export async function getAvailableTiers() {

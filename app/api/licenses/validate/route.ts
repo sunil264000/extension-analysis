@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { licenses, licenseActivations, licenseTiers } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import crypto from 'crypto'
+import { signLicenseToken } from '@/lib/license-signing'
 
 // ---------------------------------------------------------------------------
 // CORS — the extension calls this endpoint cross-origin from lovable.dev,
@@ -152,11 +153,26 @@ export async function POST(request: NextRequest) {
           ? `${Math.ceil(minutesRemaining / 60)} hr`
           : `${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`
 
+    // Sign a tamper-proof token bound to this device + expiry. The extension
+    // verifies it with the embedded public key; it cannot be forged or edited
+    // client-side, so faking validity or extending expiry is not possible
+    // without the server's private key.
+    const planName = tier?.displayName ?? 'Pro'
+    const { token } = signLicenseToken({
+      k: license.licenseKey,
+      fp: hardwareFingerprint,
+      plan: planName,
+      status: 'active',
+      exp: license.expiresAt.getTime(),
+    })
+
     return json({
       valid: true,
       message: 'License is valid',
+      // Signed, verifiable proof of validity (see lib/license-signing.ts)
+      token,
       // Flat fields the extension reads directly
-      planName: tier?.displayName ?? 'Pro',
+      planName,
       expiresAt: license.expiresAt.toISOString(),
       daysRemaining,
       minutesRemaining,

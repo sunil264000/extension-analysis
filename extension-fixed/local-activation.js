@@ -34,11 +34,16 @@
   // ==========================================================================
   //  CONFIG
   // ==========================================================================
-  // Your deployed website. The extension validates keys against this origin.
-  var LICENSE_API_BASE = "https://extension-analysis.vercel.app";
+  // HARDCODED website origin. Comes from the hardened license-core so it can
+  // NOT be redirected to a fake server via chrome.storage (the old li_api_base
+  // override has been removed on purpose — a redirect was an easy crack path).
+  var LICORE = (typeof window !== "undefined" && window.LICORE)
+            || (typeof self !== "undefined" && self.LICORE)
+            || (typeof globalThis !== "undefined" && globalThis.LICORE)
+            || null;
+  var LICENSE_API_BASE = (LICORE && LICORE.API_BASE) || "https://extension-analysis.vercel.app";
+  var OWNER_TAG = (LICORE && LICORE.OWNER_TAG) || "Modded bY Sk2";
 
-  // Allow a runtime override without rebuilding (e.g. for testing a preview):
-  //   chrome.storage.local.set({ li_api_base: "https://my-preview.vercel.app" })
   var VALIDATE_PATH = "/api/licenses/validate";
   var TRACK_PATH    = "/api/licenses/track-usage";
   var SHOP_PATH     = "/shop";
@@ -46,7 +51,7 @@
   var STORAGE_KEY_LICENSE_KEY = "li_license_key";     // the raw key the user entered
   var STORAGE_KEY_CACHE       = "li_validation_cache"; // last validation result + timestamp
   var STORAGE_KEY_FINGERPRINT = "li_hw_fingerprint";
-  var STORAGE_KEY_API_BASE    = "li_api_base";
+  var STORAGE_KEY_TOKEN       = "li_signed_token";    // signed, verifiable proof of validity
 
   var REVALIDATE_INTERVAL_MS  = 60 * 60 * 1000;  // re-check with server every 1h
   var HEARTBEAT_INTERVAL_MS   = 5 * 60 * 1000;   // local expiry check every 5m
@@ -131,11 +136,8 @@
   }
 
   function getApiBase() {
-    return storageGet(STORAGE_KEY_API_BASE).then(function (res) {
-      var override = (res[STORAGE_KEY_API_BASE] || "").trim();
-      var base = override || LICENSE_API_BASE;
-      return base.replace(/\/+$/, "");
-    });
+    // Hardcoded — no storage override accepted.
+    return Promise.resolve(LICENSE_API_BASE.replace(/\/+$/, ""));
   }
 
   // ==========================================================================
@@ -161,6 +163,7 @@
         if (data.valid) {
           return {
             valid: true,
+            token: data.token || null,   // signed, verifiable proof
             message: data.message || "License is valid",
             license: data.license || null,
             planName: data.planName || (data.license && data.license.tier && data.license.tier.displayName) || "Pro",
@@ -260,8 +263,18 @@
       planName: result.planName,
       license: result.license || null,
     };
+    // Persist the signed token when the server returned a fresh one; otherwise
+    // keep whatever verified token is already stored (cache reseed path).
+    var applyToken = function () {
+      if (result.token) {
+        var o = {};
+        o[STORAGE_KEY_TOKEN] = result.token;
+        return storageSet(o);
+      }
+      return Promise.resolve();
+    };
     var merged = Object.assign({}, seed, cache);
-    return storageSet(merged).then(function () { return licenseObj; });
+    return storageSet(merged).then(applyToken).then(function () { return licenseObj; });
   }
 
   function clearValidation() {
@@ -269,7 +282,7 @@
       "ql_license_valid", "ql_license_status", "ql_license_key", "ql_license_data",
       "ql_user_name", "ql_expires_at", "ql_activated_at", "ql_session_id",
       "license_key", "plan", "lovable_license_data",
-      STORAGE_KEY_CACHE,
+      STORAGE_KEY_CACHE, STORAGE_KEY_TOKEN,
     ]);
   }
 
@@ -278,6 +291,38 @@
     var t = Date.parse(expiresAt);
     if (isNaN(t)) return false;
     return Date.now() > t;
+  }
+
+  // ==========================================================================
+  //  SIGNED-TOKEN VERIFICATION  (the real anti-crack gate)
+  //  Reads the stored token and cryptographically verifies it against the
+  //  embedded public key, bound to THIS device fingerprint + expiry. If the
+  //  token is missing / forged / edited / expired / for another device this
+  //  returns ok:false and the caller must lock out. This is what makes editing
+  //  chrome.storage or stubbing the network response useless.
+  // ==========================================================================
+  function verifyStoredToken() {
+    if (!LICORE || typeof LICORE.verifyToken !== "function") {
+      // Hardened core missing (tampered/removed) → refuse to unlock.
+      return Promise.resolve({ ok: false, payload: null, reason: "NO_CORE" });
+    }
+    return Promise.all([storageGet(STORAGE_KEY_TOKEN), getFingerprint()]).then(function (arr) {
+      var token = arr[0][STORAGE_KEY_TOKEN];
+      var fp = arr[1];
+      return LICORE.verifyToken(token, fp);
+    });
+  }
+
+  // Detect a hand-forged unlock: ql_license_valid flipped to true in storage
+  // without a matching, verifiable signed token. If so, scrub + lock.
+  function assertNotTampered() {
+    return storageGet(["ql_license_valid", STORAGE_KEY_TOKEN]).then(function (res) {
+      if (!res.ql_license_valid) return { tampered: false };
+      return verifyStoredToken().then(function (v) {
+        if (v.ok) return { tampered: false };
+        return clearValidation().then(function () { return { tampered: true, reason: v.reason }; });
+      });
+    });
   }
 
   // ==========================================================================
@@ -404,38 +449,42 @@
         return clearValidation().then(function () { showGate({}); });
       }
 
-      // If we have a fresh, non-expired cache, unlock immediately, then
-      // silently revalidate in the background.
-      if (cache && cache.validatedAt) {
-        var age = Date.now() - Date.parse(cache.validatedAt);
-        var expired = isExpired(cache.expiresAt);
-        if (!expired && age < REVALIDATE_INTERVAL_MS) {
-          // Reseed ql_* from cache so the UI is populated this session.
+      // FAST PATH — unlock only if the STORED SIGNED TOKEN verifies against the
+      // embedded public key for THIS device and is not expired. Client-edited
+      // cache/expiry can no longer force an unlock: without a valid signature
+      // this branch is skipped entirely.
+      return verifyStoredToken().then(function (v) {
+        var age = (cache && cache.validatedAt) ? (Date.now() - Date.parse(cache.validatedAt)) : Infinity;
+        if (v.ok && age < REVALIDATE_INTERVAL_MS) {
           return persistValidation(key, {
             valid: true,
-            expiresAt: cache.expiresAt,
-            daysRemaining: cache.daysRemaining,
-            planName: cache.planName,
-            license: cache.license,
+            expiresAt: cache && cache.expiresAt,
+            daysRemaining: cache && cache.daysRemaining,
+            planName: (v.payload && v.payload.plan) || (cache && cache.planName),
+            license: cache && cache.license,
           }).then(function () { backgroundRevalidate(key); });
         }
-      }
 
-      // Otherwise do a real online check now.
-      return validateOnline(key).then(function (result) {
-        if (result.valid) {
-          return persistValidation(key, result);
-        }
-        if (result.networkError && cache && !isExpired(cache.expiresAt)) {
-          // Offline but cache still within its paid period → allow this session.
-          return persistValidation(key, {
-            valid: true, expiresAt: cache.expiresAt, daysRemaining: cache.daysRemaining,
-            planName: cache.planName, license: cache.license,
+        // Otherwise do a real online check now.
+        return validateOnline(key).then(function (result) {
+          if (result.valid) {
+            return persistValidation(key, result);
+          }
+          // Offline: allow the session ONLY if the signed token still verifies
+          // (its expiry is inside the signature, so this is tamper-proof).
+          if (result.networkError && v.ok) {
+            return persistValidation(key, {
+              valid: true,
+              expiresAt: cache && cache.expiresAt,
+              daysRemaining: cache && cache.daysRemaining,
+              planName: (v.payload && v.payload.plan) || (cache && cache.planName),
+              license: cache && cache.license,
+            });
+          }
+          // Invalid / expired / no verifiable token → lock out.
+          return clearValidation().then(function () {
+            showGate({ prefill: key, message: result.message || "Your license is no longer valid." });
           });
-        }
-        // Invalid or expired → lock out.
-        return clearValidation().then(function () {
-          showGate({ prefill: key, message: result.message || "Your license is no longer valid." });
         });
       });
     });
@@ -453,19 +502,34 @@
     });
   }
 
-  // Periodic heartbeat: re-check expiry locally + revalidate with server.
+  // Periodic heartbeat: re-verify the signed token + detect tampering, and
+  // periodically re-check with the server. The token verification runs far
+  // more often than the network revalidation so a crack attempt (editing
+  // storage, swapping the token, clock rollback past expiry) is caught fast.
   function startHeartbeat() {
     if (!IS_PANEL) return;
     setInterval(function () {
-      storageGet([STORAGE_KEY_LICENSE_KEY, STORAGE_KEY_CACHE]).then(function (res) {
+      storageGet(STORAGE_KEY_LICENSE_KEY).then(function (res) {
         var key = res[STORAGE_KEY_LICENSE_KEY];
-        var cache = res[STORAGE_KEY_CACHE];
         if (!key) return;
-        if (cache && isExpired(cache.expiresAt)) {
-          clearValidation().then(function () {
-            showGate({ prefill: key, message: "Your plan has expired. Renew to continue." });
+        // 1) Catch a hand-forged unlock (ql_license_valid set without a valid token).
+        assertNotTampered().then(function (t) {
+          if (t.tampered) {
+            showGate({ prefill: key, message: "License integrity check failed. Please re-activate." });
+            return;
+          }
+          // 2) Verify the signed token is still valid (not expired / right device).
+          verifyStoredToken().then(function (v) {
+            if (!v.ok) {
+              clearValidation().then(function () {
+                var msg = v.reason === "EXPIRED"
+                  ? "Your plan has expired. Renew to continue."
+                  : "License verification failed. Please re-activate.";
+                showGate({ prefill: key, message: msg });
+              });
+            }
           });
-        }
+        });
       });
     }, HEARTBEAT_INTERVAL_MS);
 
