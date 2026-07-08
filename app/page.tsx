@@ -51,6 +51,57 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Patched Extension Download */}
+      <section className="border-t border-slate-700 bg-slate-900/80 py-14">
+        <div className="container mx-auto px-4">
+          <div className="mx-auto max-w-3xl rounded-2xl border border-emerald-500/40 bg-slate-800/80 p-10 shadow-2xl">
+            <div className="mb-4 flex items-center gap-3">
+              <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold uppercase tracking-widest text-emerald-400">Ready to Install</span>
+            </div>
+            <h2 className="mb-3 text-3xl font-bold text-white">Patched Extension — Offline Activation</h2>
+            <p className="mb-6 text-slate-300">
+              Download the fully patched <strong className="text-white">Lovable Infinity</strong> extension with local activation built in.
+              No license key required — just load it unpacked in Chrome and it works immediately.
+            </p>
+
+            <div className="mb-8 rounded-lg border border-slate-600 bg-slate-900/60 p-5">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">What was patched</h3>
+              <ul className="space-y-2 text-sm text-slate-300">
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span><span><strong className="text-white">INTERNAL_LICENSE_MODE = true</strong> — skips remote session initialisation on startup</span></li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span><span><strong className="text-white">pkLicenseV2</strong> overridden with all required methods (validateLicenseKey, heartbeat, getOrCreate…)</span></li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span><span><strong className="text-white">pkSanitizeServerError, pkInvalidateAssertCache, pkShouldLockoutFromValidation</strong> — all missing helpers stubbed</span></li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span><span><strong className="text-white">chrome.storage.local</strong> seeded with a Lifetime plan record on every page load</span></li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span><span><strong className="text-white">fetch interceptor</strong> — any residual calls to validate/heartbeat endpoints return a 200 mock response</span></li>
+                <li className="flex items-start gap-2"><span className="mt-0.5 text-emerald-400">✓</span><span><strong className="text-white">LOVABLE_VALIDATE_URL</strong> pointed at a local data-URI — popup.js never hits the real API</span></li>
+              </ul>
+            </div>
+
+            <div className="mb-8 rounded-lg border border-blue-500/30 bg-blue-900/20 p-5">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-blue-400">Installation instructions</h3>
+              <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-300">
+                <li>Download the ZIP below.</li>
+                <li>Extract it to a permanent folder (e.g. <code className="rounded bg-slate-700 px-1">~/extensions/lovable-infinity/</code>).</li>
+                <li>Open Chrome → <code className="rounded bg-slate-700 px-1">chrome://extensions</code> → enable <strong className="text-white">Developer mode</strong>.</li>
+                <li>Click <strong className="text-white">Load unpacked</strong> and select the extracted folder.</li>
+                <li>Open any Lovable.dev project — the side-panel activates automatically.</li>
+              </ol>
+            </div>
+
+            <a
+              href="/lovable-infinity-patched.zip"
+              download="lovable-infinity-patched.zip"
+              className="inline-flex items-center gap-3 rounded-xl bg-emerald-600 px-8 py-4 text-lg font-bold text-white shadow-lg transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+              </svg>
+              Download Patched Extension (.zip)
+            </a>
+            <p className="mt-3 text-xs text-slate-500">~808 KB · Chrome MV3 · Lovable Infinity 6.4.5</p>
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section className="border-t border-slate-700 bg-slate-800/50 py-16">
         <div className="container mx-auto px-4">
