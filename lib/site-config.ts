@@ -2,9 +2,9 @@
 // authoritative tiers live in the database (license_tiers) and drive the shop.
 
 export const SITE = {
-  name: 'Lovable Infinity',
+  name: 'Unlimited Lovable',
   extensionVersion: 'v6.7.0',
-  extensionDownload: '/lovable-infinity-patched.zip',
+  extensionDownload: '/unlimited-lovable.zip',
   extensionSize: '1.0 MB',
   extensionUpdated: 'July 2026',
   browser: 'Chrome · Edge · Brave',

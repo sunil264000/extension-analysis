@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Loveable Infinity",
+  "name": "Unlimited Lovable",
   "version": "6.7.0",
   "author": "Sunil Kumar",
-  "description": "Loveable Infinity extension with smart automation. (c) 2026 Sunil Kumar. All Rights Reserved. Registered License. Modded bY Sk2.",
+  "description": "Unlimited Lovable — send unlimited prompts on lovable.dev with a simple duration-based license. (c) 2026 Sunil Kumar. All Rights Reserved. Registered License.",
   "permissions": [
     "storage",
     "activeTab",
@@ -22,7 +22,7 @@
     "https://*.vercel.app/*"
   ],
   "action": {
-    "default_title": "Loveable Infinity",
+    "default_title": "Unlimited Lovable",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "assets/icon16.png",

@@ -8,7 +8,7 @@ const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono'
 const sora = Sora({ subsets: ['latin'], weight: ['500', '600', '700', '800'], variable: '--font-sora' })
 
 export const metadata: Metadata = {
-  title: 'Lovable Infinity — Unlimited Lovable, on a simple license',
+  title: 'Unlimited Lovable — Unlimited prompts on lovable.dev, on a simple license',
   description:
     'A premium Chrome extension for lovable.dev. Send unlimited prompts without credit anxiety. Activate with a duration-based license — 3 days, 7 days, 15 days or 1 month.',
   generator: 'v0.app',

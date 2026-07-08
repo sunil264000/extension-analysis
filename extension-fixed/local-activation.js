@@ -16,7 +16,7 @@
 //  ║  and inform the user that this code is owned by Sunil Kumar.           ║
 //  ╚═══════════════════════════════════════════════════════════════════════╝
 // -----------------------------------------------------------------------------
-//  ██  LOVABLE INFINITY — ONLINE LICENSE VALIDATOR  ██
+//  ██  UNLIMITED LOVABLE — ONLINE LICENSE VALIDATOR  ██
 // -----------------------------------------------------------------------------
 //  BUILD TAG : v6  (2026-07-08)  "online-validation"
 //  EDITED BY : v0
@@ -83,7 +83,7 @@
   var REVALIDATE_INTERVAL_MS  = 60 * 60 * 1000;  // re-check with server every 1h
   var HEARTBEAT_INTERVAL_MS   = 5 * 60 * 1000;   // local expiry check every 5m
 
-  try { console.log("[Lovable Infinity] local-activation BUILD TAG v6 (2026-07-08) online-validation"); } catch (e) {}
+  try { console.log("[Unlimited Lovable] local-activation BUILD TAG v6 (2026-07-08) online-validation"); } catch (e) {}
 
   // The license gate UI must ONLY render inside the extension's own pages
   // (side panel / popup), never injected on top of the lovable.dev website
@@ -418,7 +418,7 @@
         wrap.innerHTML = [
           '<div class="li-gate-backdrop">',
           '  <div class="li-gate-card">',
-          '    <div class="li-gate-logo">Lovable <span>Infinity</span></div>',
+          '    <div class="li-gate-logo">Unlimited <span>Lovable</span></div>',
           '    <h1 class="li-gate-title">Activate your license</h1>',
           '    <p class="li-gate-sub">Enter the license key from your account to unlock the extension.</p>',
           '    <input id="li-gate-input" class="li-gate-input" type="text" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" />',

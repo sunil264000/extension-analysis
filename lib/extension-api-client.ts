@@ -1,5 +1,5 @@
 /**
- * API Client for Lovable Infinity Extension
+ * API Client for Unlimited Lovable Extension
  * 
  * This file should be copied to the extension project and used by
  * extension scripts to communicate with the license validator API.

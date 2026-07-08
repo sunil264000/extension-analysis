@@ -36,7 +36,7 @@ export default async function AdminLayout({
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-8">
               <Link href="/admin" className="font-bold text-lg">
-                Lovable Infinity Admin
+                Unlimited Lovable Admin
               </Link>
               <div className="hidden md:flex gap-1">
                 {navItems.map((item) => (

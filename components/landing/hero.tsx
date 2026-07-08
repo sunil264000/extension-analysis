@@ -27,7 +27,7 @@ export function Hero() {
         </h1>
 
         <p className="mx-auto mt-5 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground md:text-lg">
-          Lovable Infinity is a duration-based license, not a credit meter. Activate the
+          Unlimited Lovable is a duration-based license, not a credit meter. Activate the
           extension with a key from your account and keep shipping — affordable, secure, and stable.
         </p>
 
@@ -70,7 +70,7 @@ export function Hero() {
                   <InfinityIcon className="h-4 w-4 text-white" strokeWidth={2.5} />
                 </span>
                 <span className="text-sm font-semibold">
-                  Lovable Infinity <span className="text-xs text-brand">PRO</span>
+                  Unlimited Lovable <span className="text-xs text-brand">PRO</span>
                 </span>
               </div>
               <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400">

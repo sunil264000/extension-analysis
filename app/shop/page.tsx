@@ -32,7 +32,7 @@ export default async function ShopPage() {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-gradient">
               <InfinityIcon className="h-4 w-4 text-white" />
             </span>
-            Lovable Infinity
+            Unlimited Lovable
           </Link>
           <div className="flex items-center gap-4">
             <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">

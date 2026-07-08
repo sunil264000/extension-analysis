@@ -1,6 +1,6 @@
 /**
- * Lovable Infinity - License Validator v1.0
- * Validates licenses with the Lovable License Validator API
+ * Unlimited Lovable - License Validator v1.0
+ * Validates licenses with the Unlimited Lovable License Validator API
  * Replace API_ENDPOINT with your deployed validator URL
  */
 

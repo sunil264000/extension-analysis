@@ -36,7 +36,7 @@ export function Security() {
               Enterprise-grade licensing, <span className="text-gradient">by design</span>
             </h2>
             <p className="mt-4 text-pretty leading-relaxed text-muted-foreground">
-              Lovable Infinity is protected by a modern, server-authorized licensing system. Your
+              Unlimited Lovable is protected by a modern, server-authorized licensing system. Your
               purchase stays yours — secure, private, and always validated against your account.
             </p>
 

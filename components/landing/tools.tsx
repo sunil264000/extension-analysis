@@ -41,7 +41,7 @@ export function Tools() {
             One-click actions that <span className="text-gradient">write the prompt for you</span>
           </h2>
           <p className="mt-4 text-pretty text-muted-foreground">
-            Nine expert prompts built into the side panel. Tap one and Lovable Infinity sends a
+            Nine expert prompts built into the side panel. Tap one and Unlimited Lovable sends a
             finely-tuned instruction — no typing, no guesswork.
           </p>
         </div>

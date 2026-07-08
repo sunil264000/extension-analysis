@@ -4,7 +4,10 @@ import JSZip from 'jszip'
 import JavaScriptObfuscator from 'javascript-obfuscator'
 
 const SRC = path.resolve('extension-fixed')
-const OUT = path.resolve('public/lovable-infinity-patched.zip')
+const OUT = path.resolve('public/unlimited-lovable.zip')
+// Everything is nested under this folder so extracting the zip yields a single
+// cleanly-named folder the user can load straight into Chrome.
+const ROOT_FOLDER = 'Unlimited Lovable'
 const EXCLUDE = new Set(['README_EXTENSION.md', 'LICENSE_VALIDATOR_SETUP.md', '.DS_Store'])
 
 // Only our own security-critical scripts get obfuscated. The pre-existing
@@ -58,19 +61,22 @@ function add(dir, base = '') {
   for (const name of fs.readdirSync(dir)) {
     if (EXCLUDE.has(name)) continue
     const full = path.join(dir, name)
+    // `rel` is the path relative to SRC (used for OBFUSCATE matching);
+    // `zipPath` is where it lands inside the archive (under ROOT_FOLDER).
     const rel = base ? `${base}/${name}` : name
+    const zipPath = `${ROOT_FOLDER}/${rel}`
     const st = fs.statSync(full)
     if (st.isDirectory()) {
       add(full, rel)
     } else if (OBFUSCATE.has(rel)) {
       const source = fs.readFileSync(full, 'utf8')
       const result = JavaScriptObfuscator.obfuscate(source, OBFUSCATOR_OPTIONS)
-      const banner = '/* Loveable Infinity - Modded bY Sk2 - protected build */\n'
-      zip.file(rel, banner + result.getObfuscatedCode())
+      const banner = '/* Unlimited Lovable - (c) 2026 Sunil Kumar - All Rights Reserved - protected build */\n'
+      zip.file(zipPath, banner + result.getObfuscatedCode())
       obfuscatedCount++
       console.log('  obfuscated', rel)
     } else {
-      zip.file(rel, fs.readFileSync(full))
+      zip.file(zipPath, fs.readFileSync(full))
     }
   }
 }
