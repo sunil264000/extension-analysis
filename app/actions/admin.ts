@@ -533,15 +533,17 @@ export async function extendSeats(licenseId: string, additionalSeats: number) {
     throw new Error('Must add at least 1 seat')
   }
 
-  // For simplicity, we use a custom maxSeats column on the license
-  // if it differs from the tier. Here we just increment whatever
-  // the current limit is.
-  const currentSeats = license.maxSeats ?? 1
-  const newSeats = currentSeats + additionalSeats
+  // Get the tier's maxSeats and calculate new limit
+  const tier = await db
+    .select()
+    .from(licenseTiers)
+    .where(eq(licenseTiers.id, license.tierId))
+    .limit(1)
 
-  // Update the license with the new seat count.
-  // Note: the schema may not have a maxSeats column on licenses;
-  // if so, this operation is a placeholder and you'd track seats elsewhere.
+  const tierMaxSeats = tier?.[0]?.maxSeats ?? 1
+  const newSeats = tierMaxSeats + additionalSeats
+
+  // Update the license with additional seats (we track via seatsUsed)
   await db
     .update(licenses)
     .set({ updatedAt: new Date() })

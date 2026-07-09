@@ -201,6 +201,51 @@ export const promptEvents = pgTable(
   ]
 )
 
+// ========== Chat / Support System Tables ==========
+// Organize support conversations by customer (email), thread-based categorization
+
+export const chatThreads = pgTable(
+  'chat_threads',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customerId').notNull(),
+    email: text('email').notNull(), // denormalized for quick lookup
+    subject: text('subject').notNull(),
+    category: text('category').notNull().default('general'), // general | billing | support | technical
+    status: text('status').notNull().default('open'), // open | resolved | closed | on-hold
+    lastMessageAt: timestamp('lastMessageAt').notNull().defaultNow(),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_chat_threads_customerId').on(table.customerId),
+    index('idx_chat_threads_email').on(table.email),
+    index('idx_chat_threads_status').on(table.status),
+    index('idx_chat_threads_category').on(table.category),
+    index('idx_chat_threads_lastMessageAt').on(table.lastMessageAt),
+  ]
+)
+
+export const chatMessages = pgTable(
+  'chat_messages',
+  {
+    id: text('id').primaryKey(),
+    threadId: text('threadId').notNull(),
+    senderId: text('senderId').notNull(), // userId of sender
+    senderRole: text('senderRole').notNull().default('customer'), // customer | admin
+    message: text('message').notNull(),
+    attachmentUrl: text('attachmentUrl'),
+    isRead: boolean('isRead').notNull().default(false),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_chat_messages_threadId').on(table.threadId),
+    index('idx_chat_messages_senderId').on(table.senderId),
+    index('idx_chat_messages_isRead').on(table.isRead),
+    index('idx_chat_messages_createdAt').on(table.createdAt),
+  ]
+)
+
 // ========== Automation "Brain Server" Tables ==========
 // These power the anti-piracy step protocol: the extension is a dumb puppet
 // that fetches one declarative action at a time from the server. A session is
@@ -255,7 +300,8 @@ export const automationEvents = pgTable(
 // ========== Type Exports ==========
 export type AutomationSession = typeof automationSessions.$inferSelect
 export type AutomationEvent = typeof automationEvents.$inferSelect
-
+export type ChatThread = typeof chatThreads.$inferSelect
+export type ChatMessage = typeof chatMessages.$inferSelect
 
 export type User = typeof user.$inferSelect
 export type LicenseTier = typeof licenseTiers.$inferSelect
