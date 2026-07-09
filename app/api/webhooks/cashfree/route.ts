@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { issueLicenseForPayment } from '@/lib/licensing'
 import { db } from '@/lib/db'
-import { payments, licenses } from '@/lib/db/schema'
+import { payments } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
-import crypto from 'crypto'
 
 interface CashfreeWebhookPayload {
   event: string
@@ -20,104 +20,65 @@ interface CashfreeWebhookPayload {
   }
 }
 
-// Generate license key
-function generateLicenseKey(): string {
-  const segments = [
-    crypto.randomBytes(4).toString('hex').toUpperCase(),
-    crypto.randomBytes(2).toString('hex').toUpperCase(),
-    crypto.randomBytes(2).toString('hex').toUpperCase(),
-    crypto.randomBytes(2).toString('hex').toUpperCase(),
-  ]
-  return `LI-${segments.join('-')}`
-}
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const payload: CashfreeWebhookPayload = await request.json()
 
-    console.log('[Cashfree Webhook] Received event:', payload.event)
+    console.log('[v0] Cashfree webhook received:', { event: payload.event, orderId: payload.data.order.order_id })
 
     // Only process payment success events
     if (payload.event !== 'PAYMENT_SUCCESS_WEBHOOK') {
-      return NextResponse.json({
-        success: false,
-        message: 'Event not processed',
-      })
+      console.log('[v0] Skipping non-success event:', payload.event)
+      return NextResponse.json({ success: true, message: 'Event skipped' })
     }
 
     const { order, payment } = payload.data
+    const orderId = order.order_id
 
-    // Find payment by transaction ID
-    const paymentRecord = await db
+    // Find payment by order ID (which is our payment record ID)
+    const paymentRecords = await db
       .select()
       .from(payments)
-      .where(eq(payments.transactionId, order.order_id))
+      .where(eq(payments.id, orderId))
       .limit(1)
 
-    if (!paymentRecord || paymentRecord.length === 0) {
+    if (!paymentRecords.length) {
+      console.error('[v0] Payment record not found for order:', orderId)
       return NextResponse.json(
-        {
-          success: false,
-          message: 'Payment not found',
-        },
+        { success: false, message: 'Payment record not found' },
         { status: 404 }
       )
     }
 
-    const paymentData = paymentRecord[0]
+    const paymentRecord = paymentRecords[0]
+    console.log('[v0] Payment found, issuing license for order:', orderId)
 
-    // Update payment status
+    // Use the centralized licensing logic which handles idempotency
+    const license = await issueLicenseForPayment(orderId)
+
+    // Store the transaction ID for records
     await db
       .update(payments)
       .set({
-        status: 'completed',
-        paymentGateway: 'cashfree',
-        transactionId: payment?.payment_id || order.order_id,
+        transactionId: payment?.payment_id || orderId,
         updatedAt: new Date(),
       })
-      .where(eq(payments.id, paymentData.id))
+      .where(eq(payments.id, orderId))
 
-    // Generate license for this payment
-    const licenseKey = generateLicenseKey()
-    const expiryDate = new Date()
-    expiryDate.setDate(expiryDate.getDate() + 30) // Default 30 days
-
-    const licenseId = crypto.randomUUID()
-    const newLicense = {
-      id: licenseId,
-      licenseKey,
-      tierId: paymentData.tierId,
-      customerId: paymentData.customerId,
-      userId: paymentData.customerId,
-      status: 'active',
-      expiresAt: expiryDate,
-      issuedAt: new Date(),
-      seatsUsed: 0,
-      usageCount: 0,
-    }
-
-    await db.insert(licenses).values(newLicense as any)
-
-    // Update payment with license ID
-    await db
-      .update(payments)
-      .set({ licenseId })
-      .where(eq(payments.id, paymentData.id))
-
-    console.log('[Cashfree Webhook] License generated:', licenseKey)
+    console.log('[v0] Webhook completed successfully, license:', license.licenseKey)
 
     return NextResponse.json({
       success: true,
-      message: 'Payment processed successfully',
-      licenseKey,
+      message: 'Payment processed and license issued',
+      licenseKey: license.licenseKey,
     })
   } catch (error) {
-    console.error('[Cashfree Webhook Error]', error)
+    console.error('[v0] Webhook processing failed:', error)
     return NextResponse.json(
       {
         success: false,
         message: 'Webhook processing failed',
-        error: String(error),
+        error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     )
