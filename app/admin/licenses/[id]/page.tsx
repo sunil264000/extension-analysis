@@ -7,6 +7,8 @@ import {
   getLicenseWithRelations,
   updateLicenseStatus,
   extendLicense,
+  deleteLicense,
+  extendSeats,
 } from '@/app/actions/admin'
 
 type Detail = Awaited<ReturnType<typeof getLicenseWithRelations>>
@@ -76,6 +78,35 @@ export default function LicenseDetailPage() {
     } catch (err) {
       setError(`Failed to extend license by ${days} day(s). ${err instanceof Error ? err.message : 'Please try again.'}`)
     } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleExtendSeats = async (seats: number) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await extendSeats(id, seats)
+      await load()
+    } catch (err) {
+      setError(`Failed to add seats. ${err instanceof Error ? err.message : 'Please try again.'}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete this license? This cannot be undone.')) {
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await deleteLicense(id)
+      // Redirect back to licenses list
+      window.location.href = '/admin/licenses'
+    } catch (err) {
+      setError(`Failed to delete license. ${err instanceof Error ? err.message : 'Please try again.'}`)
       setBusy(false)
     }
   }
@@ -214,6 +245,41 @@ export default function LicenseDetailPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Extend Seats */}
+      <div className="rounded-lg border bg-card p-6">
+        <h2 className="text-lg font-semibold">Extend seats</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Add more concurrent device seats to this license (currently {license.seatsUsed ?? 0} in use).
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {[1, 5, 10].map((s) => (
+            <button
+              key={s}
+              disabled={busy}
+              onClick={() => handleExtendSeats(s)}
+              className="rounded-lg border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50"
+            >
+              +{s} {s === 1 ? 'seat' : 'seats'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Delete */}
+      <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-950/30">
+        <h2 className="text-lg font-semibold text-red-900 dark:text-red-100">Danger zone</h2>
+        <p className="mt-1 text-sm text-red-800 dark:text-red-300">
+          Permanently delete this license key. The customer will lose access immediately on their next check.
+        </p>
+        <button
+          disabled={busy}
+          onClick={handleDelete}
+          className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          Delete license
+        </button>
       </div>
     </div>
   )
