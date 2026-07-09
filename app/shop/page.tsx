@@ -14,16 +14,25 @@ function currencySymbol(code: string) {
 }
 
 export default async function ShopPage() {
-  try {
-    const session = await auth.api.getSession({ headers: await headers() })
-    if (!session?.user) {
-      redirect('/sign-in')
-    }
+  // Auth check must be OUTSIDE try/catch — redirect() works by throwing
+  // a special internal error, and catching it breaks the redirect.
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) {
+    redirect('/sign-in')
+  }
 
-    const tiers = await getAvailableTiers()
-    const paymentsReady = isCashfreeConfigured()
-    // Hide the free trial tier from the paid shop grid.
-    const paidTiers = tiers.filter((t) => Number(t.price) > 0)
+  // Only data fetching is wrapped — errors here produce a useful message,
+  // not a cryptic Server Components crash.
+  let tiers: Awaited<ReturnType<typeof getAvailableTiers>> = []
+  let fetchError: string | null = null
+  try {
+    tiers = await getAvailableTiers()
+  } catch (err) {
+    fetchError = err instanceof Error ? err.message : 'Failed to load plans.'
+  }
+
+  const paymentsReady = isCashfreeConfigured()
+  const paidTiers = tiers.filter((t) => Number(t.price) > 0)
 
   return (
     <div className="min-h-screen bg-background">
@@ -56,6 +65,12 @@ export default async function ShopPage() {
             instantly after payment.
           </p>
         </div>
+
+        {fetchError && (
+          <div className="mx-auto mb-8 max-w-2xl rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-center text-sm text-destructive">
+            {fetchError}
+          </div>
+        )}
 
         {!paymentsReady && (
           <div className="mx-auto mb-8 max-w-2xl rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-center text-sm text-amber-300">
@@ -116,7 +131,7 @@ export default async function ShopPage() {
           })}
         </div>
 
-        {paidTiers.length === 0 && (
+        {paidTiers.length === 0 && !fetchError && (
           <div className="py-12 text-center text-muted-foreground">
             No license plans available yet.
           </div>
@@ -124,20 +139,4 @@ export default async function ShopPage() {
       </main>
     </div>
   )
-  } catch (error) {
-    console.error('[v0] Shop page error:', error)
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Shop</h1>
-          <p className="text-muted-foreground mb-4">
-            {error instanceof Error ? error.message : 'Something went wrong while loading the shop.'}
-          </p>
-          <Link href="/dashboard" className="text-brand hover:underline">
-            Return to Dashboard
-          </Link>
-        </div>
-      </div>
-    )
-  }
 }
