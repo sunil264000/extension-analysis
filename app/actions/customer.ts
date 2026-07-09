@@ -334,62 +334,69 @@ export async function getAvailableTiers() {
  * regardless of the tier's display currency.
  */
 export async function initiatePayment(tierId: string) {
-  const user = await getUser()
-  const customer = await getCustomerProfile()
+  try {
+    const user = await getUser()
+    const customer = await getCustomerProfile()
 
-  if (!isCashfreeConfigured()) {
-    throw new Error(
-      'Online payments are not configured yet. Please add your Cashfree API keys.'
-    )
-  }
+    if (!isCashfreeConfigured()) {
+      throw new Error(
+        'Online payments are not configured yet. Please add your Cashfree API keys.'
+      )
+    }
 
-  // Get tier info
-  const tierRecord = await db
-    .select()
-    .from(licenseTiers)
-    .where(eq(licenseTiers.id, tierId))
-    .limit(1)
+    // Get tier info
+    const tierRecord = await db
+      .select()
+      .from(licenseTiers)
+      .where(eq(licenseTiers.id, tierId))
+      .limit(1)
 
-  if (!tierRecord || tierRecord.length === 0) {
-    throw new Error('Tier not found')
-  }
+    if (!tierRecord || tierRecord.length === 0) {
+      throw new Error('Tier not found')
+    }
 
-  const tier = tierRecord[0]
+    const tier = tierRecord[0]
 
-  // Cashfree order_id doubles as our payment primary key.
-  const orderId = `LIORD-${crypto.randomBytes(8).toString('hex')}`
-  const chargeCurrency = 'INR'
+    // Cashfree order_id doubles as our payment primary key.
+    const orderId = `LIORD-${crypto.randomBytes(8).toString('hex')}`
+    const chargeCurrency = 'INR'
 
-  await db.insert(payments).values({
-    id: orderId,
-    customerId: customer.id,
-    tierId,
-    amount: tier.price,
-    currency: chargeCurrency,
-    paymentGateway: 'cashfree',
-    status: 'pending',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as any)
+    await db.insert(payments).values({
+      id: orderId,
+      customerId: customer.id,
+      tierId,
+      amount: tier.price,
+      currency: chargeCurrency,
+      paymentGateway: 'cashfree',
+      status: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any)
 
-  const baseUrl = await getBaseUrl()
-  const order = await createCashfreeOrder({
-    orderId,
-    amount: Number(tier.price),
-    currency: chargeCurrency,
-    customerId: customer.id,
-    customerEmail: customer.email || user.email,
-    customerPhone: customer.phone || '',
-    returnUrl: `${baseUrl}/shop/checkout/return`,
-  })
+    const baseUrl = await getBaseUrl()
+    const order = await createCashfreeOrder({
+      orderId,
+      amount: Number(tier.price),
+      currency: chargeCurrency,
+      customerId: customer.id,
+      customerEmail: customer.email || user.email,
+      customerPhone: customer.phone || '',
+      returnUrl: `${baseUrl}/shop/checkout/return`,
+    })
 
-  return {
-    orderId,
-    paymentSessionId: order.paymentSessionId,
-    mode: cashfreeMode(),
-    amount: tier.price,
-    currency: chargeCurrency,
-    tier: { id: tier.id, name: tier.displayName },
+    return {
+      orderId,
+      paymentSessionId: order.paymentSessionId,
+      mode: cashfreeMode(),
+      amount: tier.price,
+      currency: chargeCurrency,
+      tier: { id: tier.id, name: tier.displayName },
+    }
+  } catch (error) {
+    console.error('[v0] initiatePayment error:', error)
+    throw error instanceof Error
+      ? error
+      : new Error('Failed to initiate payment: ' + String(error))
   }
 }
 

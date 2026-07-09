@@ -14,15 +14,16 @@ function currencySymbol(code: string) {
 }
 
 export default async function ShopPage() {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session?.user) {
-    redirect('/sign-in')
-  }
+  try {
+    const session = await auth.api.getSession({ headers: await headers() })
+    if (!session?.user) {
+      redirect('/sign-in')
+    }
 
-  const tiers = await getAvailableTiers()
-  const paymentsReady = isCashfreeConfigured()
-  // Hide the free trial tier from the paid shop grid.
-  const paidTiers = tiers.filter((t) => Number(t.price) > 0)
+    const tiers = await getAvailableTiers()
+    const paymentsReady = isCashfreeConfigured()
+    // Hide the free trial tier from the paid shop grid.
+    const paidTiers = tiers.filter((t) => Number(t.price) > 0)
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,4 +124,20 @@ export default async function ShopPage() {
       </main>
     </div>
   )
+  } catch (error) {
+    console.error('[v0] Shop page error:', error)
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-destructive mb-2">Error Loading Shop</h1>
+          <p className="text-muted-foreground mb-4">
+            {error instanceof Error ? error.message : 'Something went wrong while loading the shop.'}
+          </p>
+          <Link href="/dashboard" className="text-brand hover:underline">
+            Return to Dashboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
 }
