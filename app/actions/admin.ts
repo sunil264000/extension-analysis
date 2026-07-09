@@ -56,13 +56,30 @@ export async function getLicenseTiers() {
   return db.select().from(licenseTiers).orderBy(desc(licenseTiers.price))
 }
 
-// Licenses Management
 export async function getAllLicenses() {
   await getUser()
-  return db
-    .select()
+  const rows = await db
+    .select({
+      id: licenses.id,
+      licenseKey: licenses.licenseKey,
+      tierId: licenses.tierId,
+      customerId: licenses.customerId,
+      userId: licenses.userId,
+      status: licenses.status,
+      expiresAt: licenses.expiresAt,
+      issuedAt: licenses.issuedAt,
+      hardwareFingerprints: licenses.hardwareFingerprints,
+      seatsUsed: licenses.seatsUsed,
+      usageCount: licenses.usageCount,
+      lastValidatedAt: licenses.lastValidatedAt,
+      createdAt: licenses.createdAt,
+      updatedAt: licenses.updatedAt,
+      customerEmail: customers.email,
+    })
     .from(licenses)
+    .leftJoin(customers, eq(customers.id, licenses.customerId))
     .orderBy(desc(licenses.createdAt))
+  return rows
 }
 
 export async function getLicenseById(id: string) {
@@ -183,10 +200,27 @@ export async function getCustomerStats() {
 // Payments
 export async function getAllPayments() {
   await getUser()
-  return db
-    .select()
+  const rows = await db
+    .select({
+      id: payments.id,
+      customerId: payments.customerId,
+      licenseId: payments.licenseId,
+      tierId: payments.tierId,
+      amount: payments.amount,
+      currency: payments.currency,
+      paymentGateway: payments.paymentGateway,
+      transactionId: payments.transactionId,
+      status: payments.status,
+      paymentMethod: payments.paymentMethod,
+      notes: payments.notes,
+      createdAt: payments.createdAt,
+      updatedAt: payments.updatedAt,
+      customerEmail: customers.email,
+    })
     .from(payments)
+    .leftJoin(customers, eq(customers.id, payments.customerId))
     .orderBy(desc(payments.createdAt))
+  return rows
 }
 
 export async function getPaymentsByDateRange(startDate: Date, endDate: Date) {

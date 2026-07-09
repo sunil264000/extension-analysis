@@ -4,9 +4,8 @@ import { eq } from 'drizzle-orm'
 import crypto from 'crypto'
 
 function generateLicenseKey(): string {
-  // Format: LI-XXXXXXXX-XXXXXXXX-XXXXXXXX
-  const seg = () => crypto.randomBytes(4).toString('hex').toUpperCase()
-  return `LI-${seg()}-${seg()}-${seg()}`
+  const seg = (n: number) => crypto.randomBytes(n).toString('hex').toUpperCase()
+  return `LI-${seg(4)}-${seg(2)}-${seg(2)}-${seg(2)}`
 }
 
 /**

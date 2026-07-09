@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { getAllLicenses, updateLicenseStatus } from '@/app/actions/admin'
+import { getAllLicenses } from '@/app/actions/admin'
 import { License } from '@/lib/db/schema'
 
 export default function LicensesAdminPage() {
-  const [licenses, setLicenses] = useState<License[]>([])
+  const [licenses, setLicenses] = useState<(License & { customerEmail?: string | null })[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
 
@@ -25,18 +25,6 @@ export default function LicensesAdminPage() {
     fetchLicenses()
   }, [])
 
-  const handleStatusChange = async (licenseId: string, newStatus: string) => {
-    try {
-      await updateLicenseStatus(licenseId, newStatus)
-      setLicenses(
-        licenses.map((l) =>
-          l.id === licenseId ? { ...l, status: newStatus } : l
-        )
-      )
-    } catch (error) {
-      console.error('Failed to update license:', error)
-    }
-  }
 
   const filteredLicenses =
     filter === 'all'
@@ -47,6 +35,7 @@ export default function LicensesAdminPage() {
     active: licenses.filter((l) => l.status === 'active').length,
     expired: licenses.filter((l) => l.status === 'expired').length,
     suspended: licenses.filter((l) => l.status === 'suspended').length,
+    revoked: licenses.filter((l) => l.status === 'revoked').length,
   }
 
   if (loading) {
@@ -66,22 +55,23 @@ export default function LicensesAdminPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         {[
           { label: 'Active', value: stats.active, color: 'bg-green-100 text-green-800' },
           { label: 'Expired', value: stats.expired, color: 'bg-red-100 text-red-800' },
           { label: 'Suspended', value: stats.suspended, color: 'bg-yellow-100 text-yellow-800' },
+          { label: 'Revoked', value: stats.revoked, color: 'bg-orange-100 text-orange-800' },
         ].map((stat) => (
           <div key={stat.label} className="bg-card border rounded-lg p-4">
             <div className="text-sm text-muted-foreground">{stat.label}</div>
-            <div className="text-2xl font-bold mt-1">{stat.value}</div>
+            <div className={`text-2xl font-bold mt-1 ${stat.color}`}>{stat.value}</div>
           </div>
         ))}
       </div>
 
       {/* Filter */}
       <div className="flex gap-2">
-        {['all', 'active', 'expired', 'suspended'].map((status) => (
+        {['all', 'active', 'expired', 'suspended', 'revoked'].map((status) => (
           <button
             key={status}
             onClick={() => setFilter(status)}
@@ -114,7 +104,7 @@ export default function LicensesAdminPage() {
             {filteredLicenses.map((license) => (
               <tr key={license.id} className="border-t hover:bg-muted/50 transition-colors">
                 <td className="px-6 py-4 text-sm font-mono">{license.licenseKey}</td>
-                <td className="px-6 py-4 text-sm">{license.customerId}</td>
+                <td className="px-6 py-4 text-sm">{license.customerEmail || license.customerId}</td>
                 <td className="px-6 py-4 text-sm">
                   {new Date(license.expiresAt).toLocaleDateString()}
                 </td>

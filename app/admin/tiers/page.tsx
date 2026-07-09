@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { getLicenseTiers, createLicenseTier } from '@/app/actions/admin'
 import { LicenseTier } from '@/lib/db/schema'
 
 export default function TiersAdminPage() {
   const [tiers, setTiers] = useState<LicenseTier[]>([])
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -37,6 +37,7 @@ export default function TiersAdminPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSubmitting(true)
     try {
       const features = formData.features
         .split(',')
@@ -47,11 +48,11 @@ export default function TiersAdminPage() {
         name: formData.name,
         displayName: formData.displayName,
         price: formData.price,
-        maxSeats: parseInt(formData.maxSeats),
+        maxSeats: parseInt(formData.maxSeats || '0'),
         maxUsageLimit: formData.maxUsageLimit
-          ? parseInt(formData.maxUsageLimit)
+          ? parseInt(formData.maxUsageLimit || '0')
           : undefined,
-        durationDays: parseInt(formData.durationDays),
+        durationDays: parseInt(formData.durationDays || '0'),
         features,
         description: formData.description,
       })
@@ -73,6 +74,8 @@ export default function TiersAdminPage() {
     } catch (error) {
       console.error('Failed to create tier:', error)
       alert('Failed to create tier')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -198,9 +201,10 @@ export default function TiersAdminPage() {
 
             <button
               type="submit"
-              className="w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-semibold"
+              disabled={submitting}
+              className="w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create Tier
+              {submitting ? 'Creating…' : 'Create Tier'}
             </button>
           </form>
         </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import {
   ArrowLeft,
   Copy,
@@ -35,7 +35,6 @@ function timeLeftLabel(expiresAt: Date | string): string {
 
 export default function LicenseDetailPage() {
   const params = useParams<{ id: string }>()
-  const router = useRouter()
   const [detail, setDetail] = useState<LicenseDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

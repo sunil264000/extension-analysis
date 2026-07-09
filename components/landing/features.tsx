@@ -4,7 +4,7 @@ const FEATURES = [
   {
     icon: CalendarClock,
     title: 'Duration-based, not credits',
-    body: 'Pick 3 days, 7 days, 15 days or a month. Your access is time-based — build as much as you want while it is active.',
+    body: 'Pick 1 day, 7 days, 30 days or a year. Your access is time-based — build as much as you want while it is active.',
   },
   {
     icon: Wallet,

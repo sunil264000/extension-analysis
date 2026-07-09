@@ -59,7 +59,7 @@ export function UsageChart({
           cursor={false}
           content={
             <ChartTooltipContent
-              labelFormatter={(value) =>
+              labelFormatter={(value: any) =>
                 new Date(value).toLocaleDateString('en-US', {
                   month: 'short',
                   day: 'numeric',

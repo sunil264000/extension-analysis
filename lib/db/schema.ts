@@ -7,7 +7,6 @@ import {
   decimal,
   uniqueIndex,
   index,
-  primaryKey,
 } from 'drizzle-orm/pg-core'
 
 // ========== Better Auth Tables ==========
@@ -87,7 +86,7 @@ export const licenses = pgTable(
     expiresAt: timestamp('expiresAt').notNull(),
     issuedAt: timestamp('issuedAt').notNull().defaultNow(),
     hardwareFingerprints: text('hardwareFingerprints').array().default([]),
-    seatsUsed: integer('seatsUsed').notNull().default(1),
+    seatsUsed: integer('seatsUsed').notNull().default(0),
     usageCount: integer('usageCount').notNull().default(0),
     lastValidatedAt: timestamp('lastValidatedAt'),
     createdAt: timestamp('createdAt').notNull().defaultNow(),

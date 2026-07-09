@@ -10,7 +10,7 @@ const sora = Sora({ subsets: ['latin'], weight: ['500', '600', '700', '800'], va
 export const metadata: Metadata = {
   title: 'Unlimited Lovable — Unlimited prompts on lovable.dev, on a simple license',
   description:
-    'A premium Chrome extension for lovable.dev. Send unlimited prompts without credit anxiety. Activate with a duration-based license — 3 days, 7 days, 15 days or 1 month.',
+    'A premium Chrome extension for lovable.dev. Send unlimited prompts without credit anxiety. Activate with a duration-based license — 1 day, 7 days, 30 days or a year.',
   generator: 'v0.app',
   icons: {
     icon: [

@@ -32,6 +32,7 @@ export default function LicenseDetailPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const load = async () => {
     try {
@@ -55,9 +56,12 @@ export default function LicenseDetailPage() {
 
   const handleStatus = async (status: string) => {
     setBusy(true)
+    setError(null)
     try {
       await updateLicenseStatus(id, status)
       await load()
+    } catch (err) {
+      setError(`Failed to change status to "${status}". ${err instanceof Error ? err.message : 'Please try again.'}`)
     } finally {
       setBusy(false)
     }
@@ -65,9 +69,12 @@ export default function LicenseDetailPage() {
 
   const handleExtend = async (days: number) => {
     setBusy(true)
+    setError(null)
     try {
       await extendLicense(id, days)
       await load()
+    } catch (err) {
+      setError(`Failed to extend license by ${days} day(s). ${err instanceof Error ? err.message : 'Please try again.'}`)
     } finally {
       setBusy(false)
     }
@@ -125,6 +132,20 @@ export default function LicenseDetailPage() {
           </span>
         )}
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300">
+          <div className="flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-4 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Info grid */}
       <div className="grid gap-4 sm:grid-cols-2">

@@ -119,7 +119,7 @@ async function handleTrackUsage(request: NextRequest): Promise<NextResponse<Trac
       .limit(1)
 
     let todayUsage = 0
-    let usageId = crypto.randomUUID()
+    let usageId: string = crypto.randomUUID()
 
     if (usageRecord && usageRecord.length > 0) {
       todayUsage = usageRecord[0].usageCount + 1

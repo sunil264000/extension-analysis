@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { verifyAndFulfillOrder } from '@/app/actions/customer'
 import { CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { CopyKeyButton } from '@/components/shop/copy-key-button'
 
 export default async function CheckoutReturnPage({
   searchParams,
@@ -55,13 +56,14 @@ export default async function CheckoutReturnPage({
         <p className="mt-2 text-pretty text-sm text-muted-foreground">{message}</p>
 
         {licenseKey && (
-          <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4">
+          <div className="mt-6 flex flex-col items-center rounded-lg border border-border bg-muted/40 p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               Your license key
             </p>
             <p className="mt-1 break-all font-mono text-sm font-semibold text-foreground">
               {licenseKey}
             </p>
+            <CopyKeyButton licenseKey={licenseKey} />
           </div>
         )}
 

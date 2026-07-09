@@ -1,7 +1,10 @@
+'use client'
+
 import Link from 'next/link'
 import { ArrowRight, Download, Infinity as InfinityIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SITE } from '@/lib/site-config'
+import { useSession } from '@/lib/auth-client'
 
 export function CtaBanner() {
   return (
@@ -43,6 +46,8 @@ export function CtaBanner() {
 }
 
 export function SiteFooter() {
+  const { data: session } = useSession()
+
   return (
     <footer className="border-t border-border/60 py-10">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 md:flex-row">
@@ -59,7 +64,11 @@ export function SiteFooter() {
         <nav className="flex items-center gap-5 text-sm text-muted-foreground">
           <a href="#features" className="hover:text-foreground">Features</a>
           <a href="#pricing" className="hover:text-foreground">Pricing</a>
-          <Link href="/sign-in" className="hover:text-foreground">Sign in</Link>
+          {session?.user ? (
+            <Link href="/dashboard" className="hover:text-foreground">Dashboard</Link>
+          ) : (
+            <Link href="/sign-in" className="hover:text-foreground">Sign in</Link>
+          )}
           <Link href="/shop" className="hover:text-foreground">Shop</Link>
         </nav>
 

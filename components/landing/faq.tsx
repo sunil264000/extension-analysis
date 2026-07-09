@@ -6,7 +6,7 @@ import { ChevronDown } from 'lucide-react'
 const FAQS = [
   {
     q: 'Is this credit-based or duration-based?',
-    a: 'Purely duration-based. When you buy a plan you get full access for that period (3, 7, 15 or 30 days). There are no credits to count and no per-prompt charges.',
+    a: 'Purely duration-based. When you buy a plan you get full access for that period (1, 7, 30 or 365 days). There are no credits to count and no per-prompt charges.',
   },
   {
     q: 'How do I receive my license key?',
@@ -55,6 +55,8 @@ export function Faq() {
                   onClick={() => setOpen(isOpen ? null : i)}
                   className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
                   aria-expanded={isOpen}
+                  aria-controls={`faq-content-${i}`}
+                  id={`faq-btn-${i}`}
                 >
                   <span className="font-medium">{item.q}</span>
                   <ChevronDown
@@ -64,7 +66,12 @@ export function Faq() {
                   />
                 </button>
                 {isOpen && (
-                  <p className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground">
+                  <p
+                    id={`faq-content-${i}`}
+                    aria-labelledby={`faq-btn-${i}`}
+                    role="region"
+                    className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground"
+                  >
                     {item.a}
                   </p>
                 )}

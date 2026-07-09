@@ -15,7 +15,7 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
 }
 
-function withCors<T>(res: NextResponse<T>): NextResponse<T> {
+function withCors(res: NextResponse<any>): NextResponse<any> {
   Object.entries(CORS_HEADERS).forEach(([k, v]) => res.headers.set(k, v))
   return res
 }

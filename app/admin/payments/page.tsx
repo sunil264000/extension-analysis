@@ -5,7 +5,7 @@ import { getAllPayments } from '@/app/actions/admin'
 import { Payment } from '@/lib/db/schema'
 
 export default function PaymentsAdminPage() {
-  const [payments, setPayments] = useState<Payment[]>([])
+  const [payments, setPayments] = useState<(Payment & { customerEmail?: string | null })[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
 
@@ -85,6 +85,7 @@ export default function PaymentsAdminPage() {
           <thead className="border-b bg-muted/50">
             <tr>
               <th className="px-6 py-3 text-left text-sm font-semibold">Transaction ID</th>
+              <th className="px-6 py-3 text-left text-sm font-semibold">Customer</th>
               <th className="px-6 py-3 text-left text-sm font-semibold">Amount</th>
               <th className="px-6 py-3 text-left text-sm font-semibold">Gateway</th>
               <th className="px-6 py-3 text-left text-sm font-semibold">Status</th>
@@ -96,6 +97,9 @@ export default function PaymentsAdminPage() {
               <tr key={payment.id} className="border-t hover:bg-muted/50 transition-colors">
                 <td className="px-6 py-4 text-sm font-mono">
                   {payment.transactionId || payment.id}
+                </td>
+                <td className="px-6 py-4 text-sm">
+                  {payment.customerEmail || payment.customerId}
                 </td>
                 <td className="px-6 py-4 text-sm">
                   ₹{parseFloat(payment.amount.toString()).toLocaleString()}

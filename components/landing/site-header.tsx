@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { Infinity as InfinityIcon, Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useSession, signOut } from '@/lib/auth-client'
+import { useRouter } from 'next/navigation'
 
 const NAV = [
   { label: 'Features', href: '#features' },
@@ -16,6 +18,13 @@ const NAV = [
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false)
+  const { data: session } = useSession()
+  const router = useRouter()
+
+  const handleSignOut = async () => {
+    await signOut()
+    router.refresh()
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
@@ -42,17 +51,30 @@ export function SiteHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button render={<Link href="/sign-in" />} nativeButton={false} variant="ghost" size="sm">
-            Sign in
-          </Button>
-          <Button
-            render={<Link href="/shop" />}
-            nativeButton={false}
-            size="sm"
-            className="bg-brand-gradient text-white hover:opacity-90"
-          >
-            Get a license
-          </Button>
+          {session?.user ? (
+            <>
+              <Button render={<Link href="/dashboard" />} nativeButton={false} variant="ghost" size="sm">
+                Dashboard
+              </Button>
+              <Button onClick={handleSignOut} variant="outline" size="sm">
+                Sign out
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button render={<Link href="/sign-in" />} nativeButton={false} variant="ghost" size="sm">
+                Sign in
+              </Button>
+              <Button
+                render={<Link href="/shop" />}
+                nativeButton={false}
+                size="sm"
+                className="bg-brand-gradient text-white hover:opacity-90"
+              >
+                Get a license
+              </Button>
+            </>
+          )}
         </div>
 
         <button
@@ -79,22 +101,50 @@ export function SiteHeader() {
               </a>
             ))}
             <div className="mt-2 flex flex-col gap-2">
-              <Button
-                render={<Link href="/sign-in" />}
-                nativeButton={false}
-                variant="outline"
-                size="sm"
-              >
-                Sign in
-              </Button>
-              <Button
-                render={<Link href="/shop" />}
-                nativeButton={false}
-                size="sm"
-                className="bg-brand-gradient text-white"
-              >
-                Get a license
-              </Button>
+              {session?.user ? (
+                <>
+                  <Button
+                    render={<Link href="/dashboard" />}
+                    nativeButton={false}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOpen(false)}
+                  >
+                    Dashboard
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      setOpen(false)
+                      await handleSignOut()
+                    }}
+                    variant="ghost"
+                    size="sm"
+                  >
+                    Sign out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    render={<Link href="/sign-in" />}
+                    nativeButton={false}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOpen(false)}
+                  >
+                    Sign in
+                  </Button>
+                  <Button
+                    render={<Link href="/shop" />}
+                    nativeButton={false}
+                    size="sm"
+                    className="bg-brand-gradient text-white"
+                    onClick={() => setOpen(false)}
+                  >
+                    Get a license
+                  </Button>
+                </>
+              )}
             </div>
           </nav>
         </div>

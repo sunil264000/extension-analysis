@@ -2,7 +2,7 @@ const STEPS = [
   {
     step: '01',
     title: 'Choose a plan',
-    body: 'Pick the duration that fits — 3 days, 7 days, 15 days or a month. Pay securely.',
+    body: 'Pick the duration that fits — 1 day, 7 days, 30 days or a year. Pay securely.',
   },
   {
     step: '02',
