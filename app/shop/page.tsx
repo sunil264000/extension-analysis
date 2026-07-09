@@ -28,6 +28,10 @@ export default async function ShopPage() {
   try {
     tiers = await getAvailableTiers()
   } catch (err) {
+    // Re-throw Next.js internals (redirect, notFound) — never catch those.
+    if (err instanceof Error && (err.message === 'NEXT_REDIRECT' || err.message === 'NEXT_NOT_FOUND')) {
+      throw err
+    }
     fetchError = err instanceof Error ? err.message : 'Failed to load plans.'
   }
 

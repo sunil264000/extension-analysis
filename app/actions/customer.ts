@@ -340,7 +340,7 @@ export async function initiatePayment(tierId: string) {
 
     if (!isCashfreeConfigured()) {
       throw new Error(
-        'Online payments are not configured yet. Please add your Cashfree API keys.'
+        'Online payments are not configured yet. Please contact support.'
       )
     }
 
@@ -352,7 +352,7 @@ export async function initiatePayment(tierId: string) {
       .limit(1)
 
     if (!tierRecord || tierRecord.length === 0) {
-      throw new Error('Tier not found')
+      throw new Error('License plan not found. Please refresh the page and try again.')
     }
 
     const tier = tierRecord[0]
