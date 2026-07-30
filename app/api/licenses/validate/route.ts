@@ -27,6 +27,8 @@ export async function OPTIONS() {
 interface ValidateRequest {
   licenseKey: string
   hardwareFingerprint: string
+  timezone?: string
+  userAgent?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -34,6 +36,14 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as ValidateRequest
     const licenseKey = (body.licenseKey || '').trim()
     const hardwareFingerprint = (body.hardwareFingerprint || '').trim()
+    const timezone = body.timezone || 'UTC'
+    const userAgent = body.userAgent || request.headers.get('user-agent') || 'unknown'
+
+    // Get client IP address
+    const clientIp =
+      request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+      request.headers.get('x-real-ip') ||
+      'unknown'
 
     if (!licenseKey || !hardwareFingerprint) {
       return json(
@@ -104,6 +114,9 @@ export async function POST(request: NextRequest) {
 
     // Device binding — verify / register the hardware fingerprint
     const boundDevices = license.hardwareFingerprints || []
+    const deviceIps = license.deviceIpAddresses || []
+    const deviceTimezones = license.deviceTimezones || []
+    const deviceActivationTimes = license.deviceActivationTimes || []
     const deviceFound = boundDevices.includes(hardwareFingerprint)
 
     if (!deviceFound) {
@@ -118,12 +131,23 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      // Add new device with full tracking info
       const updatedFingerprints = [...boundDevices, hardwareFingerprint]
+      const updatedIps = [...deviceIps, clientIp]
+      const updatedTimezones = [...deviceTimezones, timezone]
+      const updatedActivationTimes = [...deviceActivationTimes, new Date().toISOString()]
+
       await db
         .update(licenses)
         .set({
           hardwareFingerprints: updatedFingerprints,
+          deviceIpAddresses: updatedIps,
+          deviceTimezones: updatedTimezones,
+          deviceActivationTimes: updatedActivationTimes,
           seatsUsed: updatedFingerprints.length,
+          lastDeviceIp: clientIp,
+          lastDeviceTimezone: timezone,
+          lastDeviceHwid: hardwareFingerprint,
         })
         .where(eq(licenses.id, license.id))
 
@@ -132,6 +156,16 @@ export async function POST(request: NextRequest) {
         licenseId: license.id,
         hardwareFingerprint,
       })
+    } else {
+      // Update last device info
+      await db
+        .update(licenses)
+        .set({
+          lastDeviceIp: clientIp,
+          lastDeviceTimezone: timezone,
+          lastDeviceHwid: hardwareFingerprint,
+        })
+        .where(eq(licenses.id, license.id))
     }
 
     // Update last validated timestamp
@@ -174,11 +208,29 @@ export async function POST(request: NextRequest) {
       // Flat fields the extension reads directly
       planName,
       expiresAt: license.expiresAt.toISOString(),
+      issuedAt: license.issuedAt.toISOString(),
       daysRemaining,
       minutesRemaining,
       timeRemainingLabel,
       seatsUsed: deviceFound ? license.seatsUsed : boundDevices.length + 1,
       maxSeats,
+      // Device tracking info
+      device: {
+        hwid: hardwareFingerprint,
+        ipAddress: clientIp,
+        timezone,
+        userAgent,
+        activatedAt: deviceFound
+          ? deviceActivationTimes[boundDevices.indexOf(hardwareFingerprint)]
+          : new Date().toISOString(),
+      },
+      // All registered devices (admin view)
+      devices: boundDevices.map((hwid, idx) => ({
+        hwid,
+        ipAddress: deviceIps[idx] || 'unknown',
+        timezone: deviceTimezones[idx] || 'UTC',
+        activatedAt: deviceActivationTimes[idx] || 'unknown',
+      })),
       license: {
         licenseKey: license.licenseKey,
         tierId: license.tierId,
@@ -192,6 +244,7 @@ export async function POST(request: NextRequest) {
             }
           : undefined,
         expiresAt: license.expiresAt.toISOString(),
+        issuedAt: license.issuedAt.toISOString(),
         daysRemaining,
         minutesRemaining,
         seatsUsed: license.seatsUsed,

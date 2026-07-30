@@ -85,10 +85,17 @@ export const licenses = pgTable(
     status: text('status').notNull().default('active'),
     expiresAt: timestamp('expiresAt').notNull(),
     issuedAt: timestamp('issuedAt').notNull().defaultNow(),
+    // Device tracking — each entry has HWID, IP, timezone, first seen time
     hardwareFingerprints: text('hardwareFingerprints').array().default([]),
+    deviceIpAddresses: text('deviceIpAddresses').array().default([]),
+    deviceTimezones: text('deviceTimezones').array().default([]),
+    deviceActivationTimes: text('deviceActivationTimes').array().default([]), // ISO timestamps
     seatsUsed: integer('seatsUsed').notNull().default(0),
     usageCount: integer('usageCount').notNull().default(0),
     lastValidatedAt: timestamp('lastValidatedAt'),
+    lastDeviceIp: text('lastDeviceIp'),
+    lastDeviceTimezone: text('lastDeviceTimezone'),
+    lastDeviceHwid: text('lastDeviceHwid'),
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
   },

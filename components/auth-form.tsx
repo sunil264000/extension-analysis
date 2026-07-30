@@ -30,6 +30,20 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
     setError(null)
     setLoading(true)
 
+    // Validate email format
+    if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      setError('Please enter a valid email address')
+      setLoading(false)
+      return
+    }
+
+    // For sign-up, only allow @gmail.com emails
+    if (isSignUp && !email.toLowerCase().endsWith('@gmail.com')) {
+      setError('Only @gmail.com email addresses are allowed for sign-up')
+      setLoading(false)
+      return
+    }
+
     const { error } = isSignUp
       ? await authClient.signUp.email({ email, password, name })
       : await authClient.signIn.email({ email, password })
