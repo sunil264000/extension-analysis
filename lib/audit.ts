@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { auditLogs, loginAttempts, accountLockouts } from '@/lib/db/schema'
+import { eq, and, gt, isNull, desc } from 'drizzle-orm'
 import crypto from 'crypto'
 
 export interface AuditLogInput {
@@ -66,18 +67,17 @@ export async function logLoginAttempt(
  * Check if user has too many failed login attempts (brute force protection)
  */
 export async function checkFailedAttempts(email: string, threshold = 5, timeWindow = 15 * 60 * 1000) {
+  const now = new Date()
+  const since = new Date(now.getTime() - timeWindow)
+
   const recentAttempts = await db
     .select()
     .from(loginAttempts)
-    .where((table) => {
-      const now = new Date()
-      const since = new Date(now.getTime() - timeWindow)
-      return (
-        table.email === email &&
-        !table.success &&
-        table.createdAt > since
-      )
-    })
+    .where(and(
+      eq(loginAttempts.email, email),
+      eq(loginAttempts.success, false),
+      gt(loginAttempts.createdAt, since)
+    ))
 
   return recentAttempts.length >= threshold
 }
@@ -124,8 +124,11 @@ export async function isAccountLocked(userId: string) {
   const locks = await db
     .select()
     .from(accountLockouts)
-    .where((table) => table.userId === userId && !table.releasedAt)
-    .orderBy((table) => ({ lockedUntil: 'desc' }))
+    .where(and(
+      eq(accountLockouts.userId, userId),
+      isNull(accountLockouts.releasedAt)
+    ))
+    .orderBy((t) => t.lockedUntil)
     .limit(1)
 
   if (locks.length === 0) return false
@@ -141,7 +144,7 @@ export async function isAccountLocked(userId: string) {
         releasedAt: new Date(),
         releaseReason: 'auto_release',
       })
-      .where((table) => table.id === lock.id)
+      .where(eq(accountLockouts.id, lock.id))
     return false
   }
 
@@ -156,7 +159,10 @@ export async function unlockAccount(userId: string, releaseReason = 'manual_unlo
     const locks = await db
       .select()
       .from(accountLockouts)
-      .where((table) => table.userId === userId && !table.releasedAt)
+      .where(and(
+        eq(accountLockouts.userId, userId),
+        isNull(accountLockouts.releasedAt)
+      ))
 
     for (const lock of locks) {
       await db
@@ -165,7 +171,7 @@ export async function unlockAccount(userId: string, releaseReason = 'manual_unlo
           releasedAt: new Date(),
           releaseReason,
         })
-        .where((table) => table.id === lock.id)
+        .where(eq(accountLockouts.id, lock.id))
     }
 
     await logAudit({
@@ -188,7 +194,7 @@ export async function getUserActivityHistory(userId: string, limit = 50) {
   return db
     .select()
     .from(auditLogs)
-    .where((table) => table.userId === userId)
-    .orderBy((table) => ({ createdAt: 'desc' }))
+    .where(eq(auditLogs.userId, userId))
+    .orderBy(desc(auditLogs.createdAt))
     .limit(limit)
 }
