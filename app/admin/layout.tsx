@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { getUserRole } from '@/lib/auth-helpers'
+import { AdminSignOutButton } from '@/components/admin/admin-signout-button'
 
 export default async function AdminLayout({
   children,
@@ -60,14 +61,7 @@ export default async function AdminLayout({
               >
                 My Dashboard
               </Link>
-              <form action="/api/auth/sign-out" method="POST">
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                >
-                  Sign Out
-                </button>
-              </form>
+              <AdminSignOutButton />
             </div>
           </div>
         </div>
