@@ -153,7 +153,7 @@ export async function getCustomerProfile() {
       country: '',
       city: '',
       taxId: '',
-      totalSpent: '0',
+      totalSpent: 0,
       licenseCount: 0,
       isActive: true,
       notes: '',
