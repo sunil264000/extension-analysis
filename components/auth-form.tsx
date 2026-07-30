@@ -150,6 +150,17 @@ export function AuthForm({ mode }: { mode: 'sign-in' | 'sign-up' }) {
               />
             </Field>
 
+            {!isSignUp && (
+              <div className="flex justify-end">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-brand hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            )}
+
             {error && (
               <p
                 className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"

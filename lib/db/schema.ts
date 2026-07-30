@@ -297,11 +297,75 @@ export const automationEvents = pgTable(
   ]
 )
 
+// ========== Audit & Security Tables ==========
+
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
+    id: text('id').primaryKey(),
+    userId: text('userId').notNull(),
+    action: text('action').notNull(), // 'login', 'logout', 'password_change', 'license_purchase', etc.
+    resource: text('resource'), // 'user', 'license', 'payment', etc.
+    resourceId: text('resourceId'),
+    changes: text('changes'), // JSON string of what changed
+    ipAddress: text('ipAddress'),
+    userAgent: text('userAgent'),
+    status: text('status').notNull().default('success'), // 'success', 'failure'
+    metadata: text('metadata'), // JSON string of additional context
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_audit_logs_userId').on(table.userId),
+    index('idx_audit_logs_action').on(table.action),
+    index('idx_audit_logs_createdAt').on(table.createdAt),
+  ]
+)
+
+export const loginAttempts = pgTable(
+  'login_attempts',
+  {
+    id: text('id').primaryKey(),
+    email: text('email').notNull(),
+    success: boolean('success').notNull(),
+    ipAddress: text('ipAddress'),
+    userAgent: text('userAgent'),
+    reason: text('reason'), // 'invalid_password', 'user_not_found', 'account_locked', etc.
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_login_attempts_email').on(table.email),
+    index('idx_login_attempts_ipAddress').on(table.ipAddress),
+    index('idx_login_attempts_createdAt').on(table.createdAt),
+  ]
+)
+
+export const accountLockouts = pgTable(
+  'account_lockouts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('userId').notNull(),
+    email: text('email').notNull(),
+    reason: text('reason').notNull(), // 'too_many_failed_attempts', 'suspicious_activity'
+    lockedUntil: timestamp('lockedUntil').notNull(),
+    releaseReason: text('releaseReason'), // 'manual_unlock', 'auto_release', 'password_reset'
+    releasedAt: timestamp('releasedAt'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_account_lockouts_userId').on(table.userId),
+    index('idx_account_lockouts_email').on(table.email),
+    index('idx_account_lockouts_lockedUntil').on(table.lockedUntil),
+  ]
+)
+
 // ========== Type Exports ==========
 export type AutomationSession = typeof automationSessions.$inferSelect
 export type AutomationEvent = typeof automationEvents.$inferSelect
 export type ChatThread = typeof chatThreads.$inferSelect
 export type ChatMessage = typeof chatMessages.$inferSelect
+export type AuditLog = typeof auditLogs.$inferSelect
+export type LoginAttempt = typeof loginAttempts.$inferSelect
+export type AccountLockout = typeof accountLockouts.$inferSelect
 
 export type User = typeof user.$inferSelect
 export type LicenseTier = typeof licenseTiers.$inferSelect
