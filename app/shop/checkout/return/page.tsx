@@ -26,14 +26,22 @@ export default async function CheckoutReturnPage({
       if (result.paid) {
         state = 'paid'
         licenseKey = result.licenseKey
-        message = 'Your payment was successful and your license is ready.'
+        message = 'Your payment was successful and your license has been automatically issued.'
+      } else if (result.status === 'ACTIVE' || result.status === 'PAID') {
+        // Order is paid but license generation might still be in progress
+        state = 'paid'
+        licenseKey = result.licenseKey || null
+        message = 'Your payment was successful. Your license is being prepared.'
       } else {
         state = 'pending'
-        message = `Payment status: ${result.status}. If you completed payment, it may take a moment to confirm.`
+        message = `Payment status: ${result.status}. Your license will be issued automatically once payment is confirmed.`
       }
-    } catch {
+    } catch (err) {
       state = 'error'
-      message = 'We could not verify this order.'
+      message =
+        err instanceof Error && err.message.includes('Order not found')
+          ? 'This order was not found. Please check your order ID or return to checkout.'
+          : 'We could not verify this order. Please contact support if the problem persists.'
     }
   }
 

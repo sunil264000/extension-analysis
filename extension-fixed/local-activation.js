@@ -168,8 +168,9 @@
   }
 
   // ==========================================================================
-  //  CORE: call the website to validate a key
-  //  Returns { valid, license, message, error, daysRemaining, expiresAt, planName }
+  //  CORE: call the website to validate a key with device tracking
+  //  Sends: license key, HWID, timezone, user agent, and timestamp
+  //  Returns: { valid, license, message, error, daysRemaining, expiresAt, planName, minutesRemaining, device }
   // ==========================================================================
   function validateOnline(licenseKey) {
     var key = String(licenseKey || "").trim();
@@ -178,10 +179,25 @@
     return Promise.all([getApiBase(), getFingerprint()]).then(function (arr) {
       var base = arr[0];
       var fp = arr[1];
+      
+      // Get device tracking info (timezone, user agent, etc.)
+      var timezone = (function() {
+        try {
+          return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        } catch (e) {
+          return "UTC";
+        }
+      })();
+      
       return fetch(base + VALIDATE_PATH, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ licenseKey: key, hardwareFingerprint: fp }),
+        body: JSON.stringify({
+          licenseKey: key,
+          hardwareFingerprint: fp,
+          timezone: timezone,
+          userAgent: navigator.userAgent,
+        }),
       }).then(function (resp) {
         return resp.json().then(function (data) { return { status: resp.status, data: data }; })
           .catch(function () { return { status: resp.status, data: {} }; });
@@ -195,8 +211,14 @@
             license: data.license || null,
             planName: data.planName || (data.license && data.license.tier && data.license.tier.displayName) || "Pro",
             expiresAt: data.expiresAt || (data.license && data.license.expiresAt) || null,
+            issuedAt: data.issuedAt || null,
             daysRemaining: (typeof data.daysRemaining === "number") ? data.daysRemaining
                             : (data.license && typeof data.license.daysRemaining === "number" ? data.license.daysRemaining : null),
+            minutesRemaining: (typeof data.minutesRemaining === "number") ? data.minutesRemaining
+                              : (data.license && typeof data.license.minutesRemaining === "number" ? data.license.minutesRemaining : null),
+            timeRemainingLabel: data.timeRemainingLabel || null,
+            device: data.device || { hwid: fp, timezone: timezone },
+            devices: data.devices || [],
             maxSeats: data.maxSeats || (data.license && data.license.tier && data.license.tier.maxSeats) || 1,
             seatsUsed: data.seatsUsed || (data.license && data.license.seatsUsed) || 1,
           };
@@ -223,8 +245,13 @@
   function buildLicenseObject(key, result) {
     var nowIso = new Date().toISOString();
     var expiresAt = result.expiresAt || null;
+    var issuedAt = result.issuedAt || nowIso;
     var days = (typeof result.daysRemaining === "number") ? result.daysRemaining : null;
+    var minutes = (typeof result.minutesRemaining === "number") ? result.minutesRemaining : null;
+    var timeLabel = result.timeRemainingLabel || "";
     var planName = result.planName || "Pro";
+    var device = result.device || {};
+    
     return {
       valid: true,
       status: "active",
@@ -233,11 +260,19 @@
       is_lifetime: false,
       unlimited: true,
       expires_at: expiresAt,
+      issued_at: issuedAt,
       days_remaining: days,
+      minutes_remaining: minutes,
+      time_remaining_label: timeLabel,
       activated_at: nowIso,
       checked_at: nowIso,
       user_name: planName + " Member",
       source: "online",
+      // Device tracking
+      device_hwid: device.hwid || "unknown",
+      device_ip: device.ipAddress || "unknown",
+      device_timezone: device.timezone || "UTC",
+      device_activated_at: device.activatedAt || nowIso,
       // Explicitly null so no credit UI renders:
       credits_total: null,
       credits_used: null,

@@ -14,14 +14,28 @@ function currencySymbol(code: string) {
 }
 
 export default async function ShopPage() {
+  // Auth check must be OUTSIDE try/catch — redirect() works by throwing
+  // a special internal error, and catching it breaks the redirect.
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) {
     redirect('/sign-in')
   }
 
-  const tiers = await getAvailableTiers()
+  // Only data fetching is wrapped — errors here produce a useful message,
+  // not a cryptic Server Components crash.
+  let tiers: Awaited<ReturnType<typeof getAvailableTiers>> = []
+  let fetchError: string | null = null
+  try {
+    tiers = await getAvailableTiers()
+  } catch (err) {
+    // Re-throw Next.js internals (redirect, notFound) — never catch those.
+    if (err instanceof Error && (err.message === 'NEXT_REDIRECT' || err.message === 'NEXT_NOT_FOUND')) {
+      throw err
+    }
+    fetchError = err instanceof Error ? err.message : 'Failed to load plans.'
+  }
+
   const paymentsReady = isCashfreeConfigured()
-  // Hide the free trial tier from the paid shop grid.
   const paidTiers = tiers.filter((t) => Number(t.price) > 0)
 
   return (
@@ -55,6 +69,12 @@ export default async function ShopPage() {
             instantly after payment.
           </p>
         </div>
+
+        {fetchError && (
+          <div className="mx-auto mb-8 max-w-2xl rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-center text-sm text-destructive">
+            {fetchError}
+          </div>
+        )}
 
         {!paymentsReady && (
           <div className="mx-auto mb-8 max-w-2xl rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-center text-sm text-amber-300">
@@ -115,7 +135,7 @@ export default async function ShopPage() {
           })}
         </div>
 
-        {paidTiers.length === 0 && (
+        {paidTiers.length === 0 && !fetchError && (
           <div className="py-12 text-center text-muted-foreground">
             No license plans available yet.
           </div>

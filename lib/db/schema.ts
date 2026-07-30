@@ -85,10 +85,17 @@ export const licenses = pgTable(
     status: text('status').notNull().default('active'),
     expiresAt: timestamp('expiresAt').notNull(),
     issuedAt: timestamp('issuedAt').notNull().defaultNow(),
+    // Device tracking — each entry has HWID, IP, timezone, first seen time
     hardwareFingerprints: text('hardwareFingerprints').array().default([]),
+    deviceIpAddresses: text('deviceIpAddresses').array().default([]),
+    deviceTimezones: text('deviceTimezones').array().default([]),
+    deviceActivationTimes: text('deviceActivationTimes').array().default([]), // ISO timestamps
     seatsUsed: integer('seatsUsed').notNull().default(0),
     usageCount: integer('usageCount').notNull().default(0),
     lastValidatedAt: timestamp('lastValidatedAt'),
+    lastDeviceIp: text('lastDeviceIp'),
+    lastDeviceTimezone: text('lastDeviceTimezone'),
+    lastDeviceHwid: text('lastDeviceHwid'),
     createdAt: timestamp('createdAt').notNull().defaultNow(),
     updatedAt: timestamp('updatedAt').notNull().defaultNow(),
   },
@@ -201,6 +208,51 @@ export const promptEvents = pgTable(
   ]
 )
 
+// ========== Chat / Support System Tables ==========
+// Organize support conversations by customer (email), thread-based categorization
+
+export const chatThreads = pgTable(
+  'chat_threads',
+  {
+    id: text('id').primaryKey(),
+    customerId: text('customerId').notNull(),
+    email: text('email').notNull(), // denormalized for quick lookup
+    subject: text('subject').notNull(),
+    category: text('category').notNull().default('general'), // general | billing | support | technical
+    status: text('status').notNull().default('open'), // open | resolved | closed | on-hold
+    lastMessageAt: timestamp('lastMessageAt').notNull().defaultNow(),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_chat_threads_customerId').on(table.customerId),
+    index('idx_chat_threads_email').on(table.email),
+    index('idx_chat_threads_status').on(table.status),
+    index('idx_chat_threads_category').on(table.category),
+    index('idx_chat_threads_lastMessageAt').on(table.lastMessageAt),
+  ]
+)
+
+export const chatMessages = pgTable(
+  'chat_messages',
+  {
+    id: text('id').primaryKey(),
+    threadId: text('threadId').notNull(),
+    senderId: text('senderId').notNull(), // userId of sender
+    senderRole: text('senderRole').notNull().default('customer'), // customer | admin
+    message: text('message').notNull(),
+    attachmentUrl: text('attachmentUrl'),
+    isRead: boolean('isRead').notNull().default(false),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_chat_messages_threadId').on(table.threadId),
+    index('idx_chat_messages_senderId').on(table.senderId),
+    index('idx_chat_messages_isRead').on(table.isRead),
+    index('idx_chat_messages_createdAt').on(table.createdAt),
+  ]
+)
+
 // ========== Automation "Brain Server" Tables ==========
 // These power the anti-piracy step protocol: the extension is a dumb puppet
 // that fetches one declarative action at a time from the server. A session is
@@ -252,10 +304,119 @@ export const automationEvents = pgTable(
   ]
 )
 
+// ========== Authorization Tracking ==========
+
+export const authorizationFailures = pgTable(
+  'authorization_failures',
+  {
+    id: text('id').primaryKey(),
+    licenseId: text('licenseId').notNull(),
+    licenseKey: text('licenseKey').notNull(),
+    attemptedHwid: text('attemptedHwid').notNull(),
+    failureReason: text('failureReason').notNull(), // 'DEVICE_MISMATCH', 'EXPIRED', 'REVOKED', 'SEAT_LIMIT', 'INVALID_KEY'
+    boundDevices: text('boundDevices').array().default([]),
+    ip: text('ip'),
+    timezone: text('timezone'),
+    userAgent: text('userAgent'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_auth_failures_licenseId').on(table.licenseId),
+    index('idx_auth_failures_reason').on(table.failureReason),
+    index('idx_auth_failures_createdAt').on(table.createdAt),
+  ]
+)
+
+export const licenseAuditTrail = pgTable(
+  'license_audit_trail',
+  {
+    id: text('id').primaryKey(),
+    licenseId: text('licenseId').notNull(),
+    action: text('action').notNull(), // 'CREATED', 'ACTIVATED', 'DEVICE_BOUND', 'EXPIRED', 'REVOKED', 'VALIDATED', 'FAILED_AUTH'
+    details: text('details'), // JSON string with context
+    ip: text('ip'),
+    timezone: text('timezone'),
+    hwid: text('hwid'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_audit_trail_licenseId').on(table.licenseId),
+    index('idx_audit_trail_action').on(table.action),
+    index('idx_audit_trail_createdAt').on(table.createdAt),
+  ]
+)
+
+// ========== Audit & Security Tables ==========
+
+export const auditLogs = pgTable(
+  'audit_logs',
+  {
+    id: text('id').primaryKey(),
+    userId: text('userId').notNull(),
+    action: text('action').notNull(), // 'login', 'logout', 'password_change', 'license_purchase', etc.
+    resource: text('resource'), // 'user', 'license', 'payment', etc.
+    resourceId: text('resourceId'),
+    changes: text('changes'), // JSON string of what changed
+    ipAddress: text('ipAddress'),
+    userAgent: text('userAgent'),
+    status: text('status').notNull().default('success'), // 'success', 'failure'
+    metadata: text('metadata'), // JSON string of additional context
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_audit_logs_userId').on(table.userId),
+    index('idx_audit_logs_action').on(table.action),
+    index('idx_audit_logs_createdAt').on(table.createdAt),
+  ]
+)
+
+export const loginAttempts = pgTable(
+  'login_attempts',
+  {
+    id: text('id').primaryKey(),
+    email: text('email').notNull(),
+    success: boolean('success').notNull(),
+    ipAddress: text('ipAddress'),
+    userAgent: text('userAgent'),
+    reason: text('reason'), // 'invalid_password', 'user_not_found', 'account_locked', etc.
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_login_attempts_email').on(table.email),
+    index('idx_login_attempts_ipAddress').on(table.ipAddress),
+    index('idx_login_attempts_createdAt').on(table.createdAt),
+  ]
+)
+
+export const accountLockouts = pgTable(
+  'account_lockouts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('userId').notNull(),
+    email: text('email').notNull(),
+    reason: text('reason').notNull(), // 'too_many_failed_attempts', 'suspicious_activity'
+    lockedUntil: timestamp('lockedUntil').notNull(),
+    releaseReason: text('releaseReason'), // 'manual_unlock', 'auto_release', 'password_reset'
+    releasedAt: timestamp('releasedAt'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_account_lockouts_userId').on(table.userId),
+    index('idx_account_lockouts_email').on(table.email),
+    index('idx_account_lockouts_lockedUntil').on(table.lockedUntil),
+  ]
+)
+
 // ========== Type Exports ==========
 export type AutomationSession = typeof automationSessions.$inferSelect
 export type AutomationEvent = typeof automationEvents.$inferSelect
-
+export type ChatThread = typeof chatThreads.$inferSelect
+export type ChatMessage = typeof chatMessages.$inferSelect
+export type AuthorizationFailure = typeof authorizationFailures.$inferSelect
+export type LicenseAuditTrail = typeof licenseAuditTrail.$inferSelect
+export type AuditLog = typeof auditLogs.$inferSelect
+export type LoginAttempt = typeof loginAttempts.$inferSelect
+export type AccountLockout = typeof accountLockouts.$inferSelect
 
 export type User = typeof user.$inferSelect
 export type LicenseTier = typeof licenseTiers.$inferSelect

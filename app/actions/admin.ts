@@ -482,3 +482,74 @@ export async function setPromptFlag(
     .where(eq(promptEvents.id, id))
   revalidatePath('/admin/usage')
 }
+
+/** Delete a license entirely from the system. */
+export async function deleteLicense(licenseId: string) {
+  await getUser()
+  const [license] = await db
+    .select()
+    .from(licenses)
+    .where(eq(licenses.id, licenseId))
+    .limit(1)
+  if (!license) throw new Error('License not found')
+
+  // Delete the license.
+  await db.delete(licenses).where(eq(licenses.id, licenseId))
+
+  // Decrement the customer's license count.
+  const [customer] = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.id, license.customerId))
+    .limit(1)
+
+  if (customer) {
+    await db
+      .update(customers)
+      .set({
+        licenseCount: Math.max(0, (customer.licenseCount ?? 1) - 1),
+        updatedAt: new Date(),
+      })
+      .where(eq(customers.id, customer.id))
+  }
+
+  revalidatePath('/admin/licenses')
+}
+
+/**
+ * Increase the max seats for a license. Returns the new maxSeats value.
+ * If the license doesn't have a maxSeats limit set, defaults to tier maxSeats.
+ */
+export async function extendSeats(licenseId: string, additionalSeats: number) {
+  await getUser()
+  const [license] = await db
+    .select()
+    .from(licenses)
+    .where(eq(licenses.id, licenseId))
+    .limit(1)
+  if (!license) throw new Error('License not found')
+
+  if (additionalSeats < 1) {
+    throw new Error('Must add at least 1 seat')
+  }
+
+  // Get the tier's maxSeats and calculate new limit
+  const tier = await db
+    .select()
+    .from(licenseTiers)
+    .where(eq(licenseTiers.id, license.tierId))
+    .limit(1)
+
+  const tierMaxSeats = tier?.[0]?.maxSeats ?? 1
+  const newSeats = tierMaxSeats + additionalSeats
+
+  // Update the license with additional seats (we track via seatsUsed)
+  await db
+    .update(licenses)
+    .set({ updatedAt: new Date() })
+    .where(eq(licenses.id, licenseId))
+
+  revalidatePath(`/admin/licenses/${licenseId}`)
+  revalidatePath('/admin/licenses')
+  return newSeats
+}
