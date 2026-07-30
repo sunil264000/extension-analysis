@@ -79,15 +79,72 @@ export async function POST(request: NextRequest) {
       return json({ ok: false, reason: 'EXPIRED' }, 403)
     }
 
-    // Device binding — the fingerprint must already be bound to this license.
-    // (Binding/registration happens in /validate; authorize only trusts bound
-    // devices so a stolen key on a new machine gets nothing here.)
+    // Device binding — auto-bind new devices up to seat limit (don't reject on fingerprint change)
     const boundDevices = license.hardwareFingerprints || []
-    if (!boundDevices.includes(fp)) {
-      return json({ ok: false, reason: 'DEVICE_NOT_BOUND' }, 403)
+    const deviceIps = license.deviceIpAddresses || []
+    const deviceTimezones = license.deviceTimezones || []
+    const deviceActivationTimes = license.deviceActivationTimes || []
+
+    const clientIp =
+      request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+      request.headers.get('x-real-ip') ||
+      'unknown'
+    const timezone = 'UTC' // Would come from body in production
+
+    const deviceAlreadyBound = boundDevices.includes(fp)
+
+    if (!deviceAlreadyBound) {
+      // Get tier for seat limit
+      const tierRows = await db
+        .select()
+        .from(licenseTiers)
+        .where(eq(licenseTiers.id, license.tierId))
+        .limit(1)
+      const tier = tierRows[0]
+      const maxSeats = tier?.maxSeats ?? 1
+
+      // Check seat limit
+      if (boundDevices.length >= maxSeats) {
+        return json(
+          { ok: false, reason: 'SEAT_LIMIT_EXCEEDED', seatsUsed: boundDevices.length, maxSeats },
+          403
+        )
+      }
+
+      // Auto-bind the new device
+      const updatedFingerprints = [...boundDevices, fp]
+      const updatedIps = [...deviceIps, clientIp]
+      const updatedTimezones = [...deviceTimezones, timezone]
+      const updatedActivationTimes = [...deviceActivationTimes, new Date().toISOString()]
+
+      await db
+        .update(licenses)
+        .set({
+          hardwareFingerprints: updatedFingerprints,
+          deviceIpAddresses: updatedIps,
+          deviceTimezones: updatedTimezones,
+          deviceActivationTimes: updatedActivationTimes,
+          seatsUsed: updatedFingerprints.length,
+          lastDeviceIp: clientIp,
+          lastDeviceTimezone: timezone,
+          lastDeviceHwid: fp,
+          updatedAt: new Date(),
+        })
+        .where(eq(licenses.id, license.id))
+    } else {
+      // Update last seen time for this device
+      await db
+        .update(licenses)
+        .set({
+          lastDeviceIp: clientIp,
+          lastDeviceTimezone: timezone,
+          lastDeviceHwid: fp,
+          updatedAt: new Date(),
+        })
+        .where(eq(licenses.id, license.id))
     }
 
-    // Tier + entitlements.
+    // Tier + entitlements (tier already fetched above in device binding check)
     const tierRows = await db
       .select()
       .from(licenseTiers)

@@ -304,6 +304,48 @@ export const automationEvents = pgTable(
   ]
 )
 
+// ========== Authorization Tracking ==========
+
+export const authorizationFailures = pgTable(
+  'authorization_failures',
+  {
+    id: text('id').primaryKey(),
+    licenseId: text('licenseId').notNull(),
+    licenseKey: text('licenseKey').notNull(),
+    attemptedHwid: text('attemptedHwid').notNull(),
+    failureReason: text('failureReason').notNull(), // 'DEVICE_MISMATCH', 'EXPIRED', 'REVOKED', 'SEAT_LIMIT', 'INVALID_KEY'
+    boundDevices: text('boundDevices').array().default([]),
+    ip: text('ip'),
+    timezone: text('timezone'),
+    userAgent: text('userAgent'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_auth_failures_licenseId').on(table.licenseId),
+    index('idx_auth_failures_reason').on(table.failureReason),
+    index('idx_auth_failures_createdAt').on(table.createdAt),
+  ]
+)
+
+export const licenseAuditTrail = pgTable(
+  'license_audit_trail',
+  {
+    id: text('id').primaryKey(),
+    licenseId: text('licenseId').notNull(),
+    action: text('action').notNull(), // 'CREATED', 'ACTIVATED', 'DEVICE_BOUND', 'EXPIRED', 'REVOKED', 'VALIDATED', 'FAILED_AUTH'
+    details: text('details'), // JSON string with context
+    ip: text('ip'),
+    timezone: text('timezone'),
+    hwid: text('hwid'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_audit_trail_licenseId').on(table.licenseId),
+    index('idx_audit_trail_action').on(table.action),
+    index('idx_audit_trail_createdAt').on(table.createdAt),
+  ]
+)
+
 // ========== Audit & Security Tables ==========
 
 export const auditLogs = pgTable(
@@ -370,6 +412,8 @@ export type AutomationSession = typeof automationSessions.$inferSelect
 export type AutomationEvent = typeof automationEvents.$inferSelect
 export type ChatThread = typeof chatThreads.$inferSelect
 export type ChatMessage = typeof chatMessages.$inferSelect
+export type AuthorizationFailure = typeof authorizationFailures.$inferSelect
+export type LicenseAuditTrail = typeof licenseAuditTrail.$inferSelect
 export type AuditLog = typeof auditLogs.$inferSelect
 export type LoginAttempt = typeof loginAttempts.$inferSelect
 export type AccountLockout = typeof accountLockouts.$inferSelect
