@@ -64,7 +64,6 @@ export async function issueLicenseForPayment(paymentId: string) {
     status: 'active',
     expiresAt,
     issuedAt: now,
-    hardwareFingerprints: [],
     seatsUsed: 0,
     usageCount: 0,
     createdAt: now,

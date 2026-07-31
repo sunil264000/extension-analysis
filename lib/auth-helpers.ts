@@ -104,7 +104,6 @@ export async function grantTrialLicense(userId: string, email: string) {
     status: 'active',
     expiresAt,
     issuedAt: now,
-    hardwareFingerprints: [],
     seatsUsed: 0,
     usageCount: 0,
     createdAt: now,
