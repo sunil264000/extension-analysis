@@ -199,16 +199,19 @@ export async function getAllCustomers() {
 export async function getCustomerStats() {
   try {
     await getUser()
-    console.log('[v0:admin] Fetching customer stats...')
     
     const customerList = await db.select().from(customers)
-    console.log('[v0:admin] Got customers:', customerList.length)
     
-    const licenseList = await db.select().from(licenses)
-    console.log('[v0:admin] Got licenses:', licenseList.length)
+    const licenseList = await db
+      .select({
+        id: licenses.id,
+        licenseKey: licenses.licenseKey,
+        status: licenses.status,
+        expiresAt: licenses.expiresAt,
+      })
+      .from(licenses)
     
     const paymentList = await db.select().from(payments)
-    console.log('[v0:admin] Got payments:', paymentList.length)
 
     return {
       totalCustomers: customerList.length,
