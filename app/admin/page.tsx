@@ -1,11 +1,34 @@
 import { getCustomerStats, getRevenueStats } from '@/app/actions/admin'
 
 export default async function AdminDashboard() {
-  const stats = await getCustomerStats()
-  const revenueStats = await getRevenueStats()
+  let stats = {
+    totalCustomers: 0,
+    totalLicenses: 0,
+    totalRevenue: 0,
+    activeCustomers: 0,
+  }
+  let revenueStats = {
+    totalRevenue: 0,
+    transactionCount: 0,
+  }
+  let error = null
+
+  try {
+    stats = await getCustomerStats()
+    revenueStats = await getRevenueStats()
+  } catch (err) {
+    console.error('[v0:admin] Dashboard stats error:', err)
+    error = err instanceof Error ? err.message : 'Failed to load stats'
+  }
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="bg-destructive/10 border border-destructive rounded-lg p-4">
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Stats Cards */}
         <div className="bg-card border rounded-lg p-6">

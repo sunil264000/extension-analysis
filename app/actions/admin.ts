@@ -181,19 +181,31 @@ export async function getAllCustomers() {
 }
 
 export async function getCustomerStats() {
-  await getUser()
-  const customerList = await db.select().from(customers)
-  const licenseList = await db.select().from(licenses)
-  const paymentList = await db.select().from(payments)
+  try {
+    await getUser()
+    console.log('[v0:admin] Fetching customer stats...')
+    
+    const customerList = await db.select().from(customers)
+    console.log('[v0:admin] Got customers:', customerList.length)
+    
+    const licenseList = await db.select().from(licenses)
+    console.log('[v0:admin] Got licenses:', licenseList.length)
+    
+    const paymentList = await db.select().from(payments)
+    console.log('[v0:admin] Got payments:', paymentList.length)
 
-  return {
-    totalCustomers: customerList.length,
-    totalLicenses: licenseList.length,
-    totalRevenue: paymentList.reduce(
-      (sum, p) => sum + (p.status === 'completed' ? parseFloat(p.amount.toString()) : 0),
-      0
-    ),
-    activeCustomers: customerList.filter((c) => c.isActive).length,
+    return {
+      totalCustomers: customerList.length,
+      totalLicenses: licenseList.length,
+      totalRevenue: paymentList.reduce(
+        (sum, p) => sum + (p.status === 'completed' ? parseFloat(p.amount.toString()) : 0),
+        0
+      ),
+      activeCustomers: customerList.filter((c) => c.isActive).length,
+    }
+  } catch (err) {
+    console.error('[v0:admin] getCustomerStats error:', err)
+    throw err
   }
 }
 
@@ -269,26 +281,35 @@ export async function getLicenseUsageStats(licenseId: string) {
 }
 
 export async function getRevenueStats() {
-  await getUser()
-  const paymentData = await db
-    .select()
-    .from(payments)
-    .where(eq(payments.status, 'completed'))
-    .orderBy(desc(payments.createdAt))
+  try {
+    await getUser()
+    console.log('[v0:admin] Fetching revenue stats...')
+    
+    const paymentData = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.status, 'completed'))
+      .orderBy(desc(payments.createdAt))
 
-  // Group by month
-  const monthlyRevenue: { [key: string]: number } = {}
-  paymentData.forEach((payment) => {
-    const date = new Date(payment.createdAt)
-    const monthKey = date.toISOString().substring(0, 7) // YYYY-MM
-    if (!monthlyRevenue[monthKey]) monthlyRevenue[monthKey] = 0
-    monthlyRevenue[monthKey] += parseFloat(payment.amount.toString())
-  })
+    console.log('[v0:admin] Got payments:', paymentData.length)
 
-  return {
-    totalRevenue: Object.values(monthlyRevenue).reduce((a, b) => a + b, 0),
-    monthlyRevenue,
-    transactionCount: paymentData.length,
+    // Group by month
+    const monthlyRevenue: { [key: string]: number } = {}
+    paymentData.forEach((payment) => {
+      const date = new Date(payment.createdAt)
+      const monthKey = date.toISOString().substring(0, 7) // YYYY-MM
+      if (!monthlyRevenue[monthKey]) monthlyRevenue[monthKey] = 0
+      monthlyRevenue[monthKey] += parseFloat(payment.amount.toString())
+    })
+
+    return {
+      totalRevenue: Object.values(monthlyRevenue).reduce((a, b) => a + b, 0),
+      monthlyRevenue,
+      transactionCount: paymentData.length,
+    }
+  } catch (err) {
+    console.error('[v0:admin] getRevenueStats error:', err)
+    throw err
   }
 }
 
