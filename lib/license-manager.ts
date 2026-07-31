@@ -223,10 +223,7 @@ export async function bindDevice(
       await db
         .update(licenses)
         .set({
-          hardwareFingerprints: boundDevices,
-          deviceIpAddresses: deviceIps,
-          deviceTimezones: deviceTimezones,
-          deviceActivationTimes: deviceActivationTimes,
+          // Array fields don't exist in DB yet, skipping: hardwareFingerprints, deviceIpAddresses, etc
           seatsUsed: boundDevices.length,
           lastDeviceIp: device?.ip,
           lastDeviceTimezone: device?.timezone,

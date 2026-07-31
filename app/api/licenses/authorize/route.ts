@@ -120,14 +120,12 @@ export async function POST(request: NextRequest) {
       await db
         .update(licenses)
         .set({
-          hardwareFingerprints: updatedFingerprints,
-          deviceIpAddresses: updatedIps,
-          deviceTimezones: updatedTimezones,
-          deviceActivationTimes: updatedActivationTimes,
-          seatsUsed: updatedFingerprints.length,
-          lastDeviceIp: clientIp,
+          // Array fields don't exist in DB yet, skipping: hardwareFingerprints, deviceIpAddresses, etc
+          seatsUsed: boundDevices.length,
+          lastDeviceIp: ipAddress,
           lastDeviceTimezone: timezone,
-          lastDeviceHwid: fp,
+          lastDeviceHwid: hardwareFingerprint,
+          lastValidatedAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(licenses.id, license.id))
