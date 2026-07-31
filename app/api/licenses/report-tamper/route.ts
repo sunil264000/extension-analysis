@@ -75,12 +75,25 @@ export async function POST(request: NextRequest) {
 
     if (rows.length > 0) {
       const lic = rows[0]
-      // Kill switch: revoke the license so it can never validate again.
-      await db
-        .update(licenses)
-        .set({ status: 'revoked' })
-        .where(eq(licenses.id, lic.id))
+      
+      // SAFETY CHECK: Only revoke for certain reasons (actual tampering detected)
+      // Don't revoke for loading timing issues like 'NO_CORE', 'CORE_MISSING', 'ACTIVATION_MISSING'
+      const SAFE_REVOKE_REASONS = ['CORE_PATCHED', 'PUBKEY_TAMPERED', 'MANIFEST_MODIFIED']
+      const shouldRevoke = SAFE_REVOKE_REASONS.includes(reason)
+      
+      if (shouldRevoke) {
+        console.log('[v0:tamper] REVOKING license:', { licenseKey, reason, detail })
+        // Kill switch: revoke the license so it can never validate again.
+        await db
+          .update(licenses)
+          .set({ status: 'revoked' })
+          .where(eq(licenses.id, lic.id))
+      } else {
+        console.log('[v0:tamper] NOT revoking (safe reason):', { licenseKey, reason, detail })
+      }
 
+      const revoked = SAFE_REVOKE_REASONS.includes(reason)
+      
       await db.insert(promptEvents).values({
         id: crypto.randomUUID(),
         licenseId: lic.id,
@@ -91,10 +104,10 @@ export async function POST(request: NextRequest) {
         hardwareFingerprint: fp || null,
         ipAddress: ip,
         flagged: true,
-        flagReason: `TAMPER→REVOKED:${reason} ${detail}`.trim(),
+        flagReason: revoked ? `TAMPER→REVOKED:${reason} ${detail}`.trim() : `TAMPER→LOGGED:${reason} ${detail}`.trim(),
       } as any)
 
-      return json({ ok: true, revoked: true })
+      return json({ ok: true, revoked })
     }
 
     return json({ ok: true, revoked: false })

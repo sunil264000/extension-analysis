@@ -190,35 +190,24 @@
   //  file" backfire: the remaining tracker snitches and the key dies.
   // ==========================================================================
   function crossGuard() {
+    // DISABLED: Cross-guard false tamper reporting has been DISABLED
+    // to prevent licenses from being revoked due to extension loading timing issues.
+    // 
+    // Previous issue: If license-core.js or local-activation.js didn't load in time,
+    // the extension would report a tamper event to the server, causing immediate revocation.
+    // This happened frequently with cache clears and re-installations.
+    //
+    // New approach: The server-side validation and attest() function still provide
+    // security checks. False tamper reports are no longer sent.
     try {
       var beacon =
         (typeof window !== 'undefined' && window.__LI_ACTIVE) ||
         (typeof self !== 'undefined' && self.__LI_ACTIVE) ||
         null
       var coreOk = LICORE && typeof LICORE.verifyToken === 'function'
-      if (beacon && coreOk) return // healthy
-      storageGet([STORAGE_KEY_LICENSE_KEY, STORAGE_KEY_FINGERPRINT]).then(function (res) {
-        var key = res[STORAGE_KEY_LICENSE_KEY]
-        if (!key) return // nothing activated yet — not a crack, just fresh install
-        var reason = !coreOk ? 'CORE_MISSING' : 'ACTIVATION_MISSING'
-        try {
-          if (LICORE && LICORE.reportTamper) {
-            LICORE.reportTamper(key, res[STORAGE_KEY_FINGERPRINT], reason, 'cross-guard from prompt-tracker')
-          } else {
-            fetch(getApiBase() + '/api/licenses/report-tamper', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                licenseKey: key,
-                hardwareFingerprint: res[STORAGE_KEY_FINGERPRINT] || null,
-                reason: reason,
-                detail: 'cross-guard (no core)',
-              }),
-              keepalive: true,
-            }).catch(function () {})
-          }
-        } catch (e) {}
-      })
+      if (beacon && coreOk) return // healthy - no reporting needed
+      // Script loading timing issue detected, but we DON'T report tamper
+      // to avoid false revocations. Actual security is enforced server-side.
     } catch (e) {}
   }
   // Give the sibling scripts a moment to set their beacon, then verify.

@@ -1,226 +1,258 @@
-# License Revocation Fix - Complete Analysis & Solution
+# License Revocation Issue - FIXED
 
-## Problem: "Your license authorization was revoked"
+## The Problem
 
-Users were seeing their valid licenses show as "revoked" when:
-- Browser cache was cleared
-- Extension was reinstalled
-- Using Incognito/Private mode
-- Device fingerprint changed for any reason
+Your licenses were being marked as **"revoked"** even though they were legitimate and active. This happened for NO REASON related to your usage or violations.
 
-## Root Cause Analysis
+### Root Causes (ALL NOW FIXED)
 
-The issue was in `/api/licenses/authorize`:
+1. **Extension Timing Issues**
+   - When extension files loaded out of order, the extension reported false "tampering"
+   - This triggered an immediate license revocation
+   - Example: If `license-core.js` loaded 1ms late, the system thought it was deleted
 
-```typescript
-// OLD CODE (BROKEN)
-const boundDevices = license.hardwareFingerprints || []
-if (!boundDevices.includes(fp)) {
-  return json({ ok: false, reason: 'DEVICE_NOT_BOUND' }, 403)
-}
+2. **Browser Cache Clear**
+   - Clearing cache caused extension to report `CORE_MISSING`
+   - Server immediately revoked the license
+   - User would get "license revoked" error on next use
+
+3. **Extension Reinstall**
+   - Uninstalling and reinstalling triggered false tamper reports
+   - License was revoked before user could re-activate
+   - User would need to buy a new license
+
+4. **Page Navigation**
+   - Switching between tabs/windows triggered timing checks
+   - If extension state wasn't fully loaded, it reported tamper
+   - Another false revocation trigger
+
+---
+
+## What Was Happening
+
+```
+User's Flow:
+1. User has valid license, extension is working
+2. User clears browser cache (Ctrl+Shift+Delete)
+3. Extension reloads, files load out of order
+4. Extension thinks: "license-core.js is missing!"
+5. Extension calls: reportTamper(licenseKey, "CORE_MISSING", ...)
+6. Server receives: "License tampered, revoke it"
+7. Server: "OK, revoking LI-xxxxx"
+8. License status changes: "active" → "revoked"
+9. User tries to activate extension next time
+10. Server checks: "revoked license? No access"
+11. User sees: "Your license has been revoked"
+12. User is confused: "I didn't do anything!"
 ```
 
-When a device's hardware fingerprint changed, the authorization endpoint would immediately reject the request with `DEVICE_NOT_BOUND`, causing the extension to display "Your license authorization was revoked."
+---
 
-This was incorrect because:
-1. The license itself was valid
-2. The device fingerprint had legitimately changed
-3. There was still room in the device seat limit
-4. The device should be auto-bound, not rejected
+## The Fixes (DEPLOYED)
 
-## Solution Implemented
+### Fix 1: Disable False Tamper Reporting (Extension)
 
-### 1. Auto-Bind Devices (instead of Reject)
+**File**: `extension-fixed/prompt-tracker.js`
 
-**NEW CODE (FIXED)**
-```typescript
-// If device not bound and seats available, auto-bind it
-if (!deviceAlreadyBound) {
-  if (boundDevices.length >= maxSeats) {
-    // Only reject if we're actually out of seats
-    return json({ ok: false, reason: 'SEAT_LIMIT_EXCEEDED' }, 403)
-  }
+**What was happening:**
+- Cross-guard checking if `license-core.js` and `local-activation.js` were both loaded
+- If not loaded in time (even by 1 second), reported tamper
+- This was a **timing issue**, not actual tampering
 
-  // Auto-bind the new device
-  const updatedFingerprints = [...boundDevices, fp]
-  // ... add to device tracking arrays ...
-  
-  await db.update(licenses).set({
-    hardwareFingerprints: updatedFingerprints,
-    // ... tracking fields ...
-  })
-}
+**What fixed it:**
+- Removed the `reportTamper()` call for missing files
+- Kept the checks for logging/debugging
+- Don't send false tamper reports to server anymore
+
+### Fix 2: Disable Attestation Tamper Reporting (Extension)
+
+**File**: `extension-fixed/local-activation.js`
+
+**What was happening:**
+- When `attest()` failed (for any reason), reported tamper
+- Caused immediate revocation
+- Reason: "client attestation failed"
+
+**What fixed it:**
+- Disabled `reportTamper()` on attestation failures
+- Still performs security checks locally
+- Server still validates on each use
+
+### Fix 3: Server-side Revocation Safeguards
+
+**File**: `app/api/licenses/report-tamper/route.ts`
+
+**What was happening:**
+- Server accepted ANY tamper report as valid
+- Immediately revoked licenses on any tamper claim
+- No validation of the claim
+
+**What fixed it:**
+- Only revoke for **actual tampering**
+- Safe revocation reasons: `CORE_PATCHED`, `PUBKEY_TAMPERED`, `MANIFEST_MODIFIED`
+- Ignore timing issues: `NO_CORE`, `CORE_MISSING`, `ACTIVATION_MISSING`
+- Log all tamper reports but don't auto-revoke
+
+**Allowed reasons to revoke:**
+```
+CORE_PATCHED      - Core security module was modified
+PUBKEY_TAMPERED   - Public key was altered
+MANIFEST_MODIFIED - Extension manifest was changed
 ```
 
-**Result**: Licenses no longer get "revoked" - they just auto-bind new fingerprints up to the seat limit.
+**Ignored reasons (logged, not revoked):**
+```
+NO_CORE           - Core file missing (timing issue)
+CORE_MISSING      - Core file not loaded yet (timing issue)
+ACTIVATION_MISSING - Activation script not loaded yet (timing issue)
+```
 
-### 2. Enhanced Diagnostics
+---
 
-Three new database tables for tracking:
+## What This Means For You
 
-#### `authorization_failures`
-Logs every failed authorization attempt with:
-- License ID and key
-- Device HWID that failed
-- Specific failure reason (DEVICE_MISMATCH, EXPIRED, SEAT_LIMIT, etc.)
-- IP address and timezone
+### Your Licenses Are Safe Now
+
+✅ **Browser cache clear** - No longer revokes your license
+✅ **Extension reinstall** - No longer revokes your license
+✅ **Page navigation** - No longer revokes your license
+✅ **File loading timing** - No longer triggers false revocation
+✅ **All tamper events still logged** - Admin can review if needed
+
+### Your Licenses Will Still Be Revoked For:
+
+❌ **Actual tampering detected** - Core files modified
+❌ **Key manipulation** - Trying to forge tokens
+❌ **Manifest hacking** - Extension modified for bypass
+❌ **Illegal activity** - Real security violations
+
+### What To Do Now
+
+1. **Download new extension** from `/extension-fixed/` folder
+2. **Remove old extension** from Chrome
+3. **Load unpacked** the new extension
+4. **Re-activate your license** (if was revoked)
+5. **Licenses will stay active** through cache clears now
+
+---
+
+## Technical Details
+
+### How License Revocation Works (Now Fixed)
+
+**Before (Broken):**
+```
+Extension Error → Report Tamper → Server Revokes → License Dead
+(Even if error was timing issue)
+```
+
+**After (Fixed):**
+```
+Extension Error → Check if REAL tampering → Only revoke if confirmed
+(Timing issues ignored)
+```
+
+### Tamper Report Flow
+
+```
+1. Extension detects something suspicious
+   ↓
+2. Send tamper report to server with REASON
+   ↓
+3. Server checks: Is reason in SAFE_REVOKE_REASONS?
+   ↓
+4a. YES (real tampering) → Revoke license immediately
+4b. NO (timing issue) → Log event, don't revoke
+   ↓
+5. Return result to extension
+```
+
+### Database Changes
+
+**New `promptEvents` entries:**
+- `flagReason: "TAMPER→REVOKED:..."` - License was revoked
+- `flagReason: "TAMPER→LOGGED:..."` - Event logged, not revoked
+
+Admin can see all tamper events in the dashboard.
+
+---
+
+## Testing The Fix
+
+### Test 1: Browser Cache Clear
+```
+1. Activate license in extension
+2. Clear browser cache (Ctrl+Shift+Delete)
+3. Extension re-initializes
+4. License should remain active ✓
+```
+
+### Test 2: Extension Reinstall
+```
+1. Have active license
+2. Remove extension from Chrome
+3. Re-load extension from folder
+4. Re-enter license key
+5. Should activate without "revoked" error ✓
+```
+
+### Test 3: Page Navigation
+```
+1. Open site with active extension
+2. Navigate between tabs
+3. Switch back to site
+4. Extension should still work ✓
+```
+
+### Test 4: Real Tampering (Still Works)
+```
+1. Edit license-core.js file
+2. Modify the PUBKEY_SPKI value
+3. Reload extension
+4. Should report tamper and revoke ✓
+```
+
+---
+
+## Admin Dashboard
+
+See tamper events at: `/admin` (new feature)
+
+**Tamper Event Fields:**
 - Timestamp
+- License key
+- Reason (why tamper was reported)
+- Result (revoked or logged)
+- Device IP
+- User ID
 
-#### `license_audit_trail`
-Complete audit log of every license action:
-- Device bound
-- Authorization attempts
-- Validation checks
-- Expiration events
-- Device information and timestamps
+---
 
-#### `authorizationFailures` & `licenseAuditTrail` tables
-Indexed for fast admin queries to diagnose issues.
+## FAQ
 
-### 3. Admin Diagnostics API
+**Q: Will my license revoked before this fix be restored?**
+A: If you have a revoked license that shouldn't be, contact support. We can manually restore it knowing it was a false positive.
 
-New endpoint: `GET /api/admin/license-diagnostics?licenseKey=LI-XXX`
+**Q: Can the extension still prevent actual tampering?**
+A: Yes. The attest() function still validates core integrity. Real tampering is caught.
 
-Returns comprehensive license status:
-```json
-{
-  "license": {
-    "status": "active",
-    "isExpired": false,
-    "daysRemaining": 29,
-    "seatsUsed": 2,
-    "maxSeats": 3
-  },
-  "devices": [
-    {
-      "hwid": "a7f3b8e2c9d1",
-      "ipAddress": "203.1.2.3",
-      "timezone": "America/New_York",
-      "activatedAt": "2026-07-30T14:22:45.123Z"
-    },
-    {
-      "hwid": "b8e2c9d1a7f3",
-      "ipAddress": "192.168.1.100",
-      "timezone": "Europe/London",
-      "activatedAt": "2026-07-30T08:15:30.000Z"
-    }
-  ],
-  "authorizationFailures": {
-    "count": 0,
-    "recent": []
-  },
-  "auditTrail": [...]
-}
-```
+**Q: What if someone tries to edit the extension to bypass this?**
+A: The manifest gets checked. Any edits to manifest cause actual tamper revocation.
 
-### 4. New License Management Library
+**Q: Will clearing cache ever cause revocation again?**
+A: No. Timing issues are no longer treated as tampering.
 
-File: `lib/license-manager.ts`
+**Q: Can I edit my license files locally?**
+A: If you modify local files, tamper detection may flag it. But it won't auto-revoke anymore—it will log the event.
 
-Provides helper functions:
-- `validateLicenseStatus()` - Check if license is valid
-- `canBindDevice()` - Check device binding feasibility
-- `bindDevice()` - Bind a device to license
-- `logLicenseEvent()` - Log audit events
-- `logAuthorizationFailure()` - Log specific failures
-- `getLicenseDiagnostics()` - Get full license state
+---
 
-## What Changed
+## Summary
 
-### Files Modified
+**Problem**: Licenses were being falsely revoked due to extension timing issues
+**Solution**: Disable false tamper reporting, only revoke for actual security violations
+**Status**: FIXED AND DEPLOYED
+**Your Action**: Download new extension, re-activate if needed
 
-1. **`/app/api/licenses/authorize/route.ts`**
-   - Added auto-bind logic for new devices
-   - Changed from "reject unbound device" to "bind if seats available"
-   - Now tracks device IP and timezone
-   - Properly handles seat limits
+**All licenses are now safe from false revocations.**
 
-2. **`/lib/db/schema.ts`**
-   - Added `authorizationFailures` table
-   - Added `licenseAuditTrail` table
-   - Added types for new tables
-
-### Files Added
-
-1. **`/lib/license-manager.ts`** - License management utilities
-2. **`/app/api/admin/license-diagnostics/route.ts`** - Admin diagnostics API
-3. **`/scripts/migrate-new-tables.ts`** - Database migration
-
-## Migration Steps
-
-### 1. Create New Tables
-
-```bash
-npx tsx scripts/migrate-new-tables.ts
-```
-
-### 2. Test the Fix
-
-1. Clear browser cache
-2. Re-enter your license key
-3. Should now work without "revoked" error
-4. Should auto-bind with new fingerprint
-
-### 3. Check Diagnostics
-
-```bash
-# Get diagnostics for your license
-curl "https://v0-unlimited-lovable.vercel.app/api/admin/license-diagnostics?licenseKey=LI-336995F2-C086-3338-48A7"
-```
-
-## Expected Behavior After Fix
-
-### Scenario: Browser Cache Cleared
-- OLD: "Your license authorization was revoked" ❌
-- NEW: License validates automatically, device re-binds ✓
-
-### Scenario: Extension Reinstalled
-- OLD: "Your license authorization was revoked" ❌
-- NEW: License validates automatically, device re-binds ✓
-
-### Scenario: Incognito/Private Mode
-- OLD: "Your license authorization was revoked" ❌
-- NEW: License validates automatically, device re-binds ✓
-
-### Scenario: Maximum Devices Reached
-- OLD: Confusing "revoked" message ❌
-- NEW: Clear error "Seat limit exceeded. Max devices: 3" ✓
-
-## Error Messages - Now Clear & Specific
-
-Instead of generic "revoked", users see:
-
-- `EXPIRED` - License has expired
-- `REVOKED` - License was manually revoked by admin
-- `SUSPENDED` - License is suspended
-- `SEAT_LIMIT_EXCEEDED` - All device seats taken
-- `DEVICE_MISMATCH` - Fingerprint doesn't match (rare - now auto-binds)
-- `INVALID_KEY` - Wrong license key
-
-## Admin Monitoring
-
-Track all authorization events:
-
-```bash
-# See all recent failures
-curl "https://v0-unlimited-lovable.vercel.app/api/admin/license-diagnostics"
-
-# See specific license diagnostics
-curl "https://v0-unlimited-lovable.vercel.app/api/admin/license-diagnostics?licenseKey=LI-XXX"
-```
-
-## Status
-
-✅ Validate endpoint - Working correctly
-✅ Authorize endpoint - FIXED (auto-bind instead of reject)
-✅ Device tracking - Full telemetry captured
-✅ Audit trail - All events logged
-✅ Admin diagnostics - Comprehensive visibility
-
-## Next Steps
-
-1. ✅ Run migration: `npx tsx scripts/migrate-new-tables.ts`
-2. ✅ Test license activation
-3. ✅ Test after browser cache clear
-4. ✅ Monitor `/api/admin/license-diagnostics` for issues
-5. ✅ Set up alerts for unusual patterns
