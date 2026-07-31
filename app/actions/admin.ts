@@ -57,29 +57,33 @@ export async function getLicenseTiers() {
 }
 
 export async function getAllLicenses() {
-  await getUser()
-  const rows = await db
-    .select({
-      id: licenses.id,
-      licenseKey: licenses.licenseKey,
-      tierId: licenses.tierId,
-      customerId: licenses.customerId,
-      userId: licenses.userId,
-      status: licenses.status,
-      expiresAt: licenses.expiresAt,
-      issuedAt: licenses.issuedAt,
-      hardwareFingerprints: licenses.hardwareFingerprints,
-      seatsUsed: licenses.seatsUsed,
-      usageCount: licenses.usageCount,
-      lastValidatedAt: licenses.lastValidatedAt,
-      createdAt: licenses.createdAt,
-      updatedAt: licenses.updatedAt,
-      customerEmail: customers.email,
-    })
-    .from(licenses)
-    .leftJoin(customers, eq(customers.id, licenses.customerId))
-    .orderBy(desc(licenses.createdAt))
-  return rows
+  try {
+    await getUser()
+    const rows = await db
+      .select({
+        id: licenses.id,
+        licenseKey: licenses.licenseKey,
+        tierId: licenses.tierId,
+        customerId: licenses.customerId,
+        userId: licenses.userId,
+        status: licenses.status,
+        expiresAt: licenses.expiresAt,
+        issuedAt: licenses.issuedAt,
+        seatsUsed: licenses.seatsUsed,
+        usageCount: licenses.usageCount,
+        lastValidatedAt: licenses.lastValidatedAt,
+        createdAt: licenses.createdAt,
+        updatedAt: licenses.updatedAt,
+        customerEmail: customers.email,
+      })
+      .from(licenses)
+      .leftJoin(customers, eq(customers.id, licenses.customerId))
+      .orderBy(desc(licenses.createdAt))
+    return rows
+  } catch (err) {
+    console.error('[v0:admin] getAllLicenses error:', err)
+    throw new Error('Failed to fetch licenses')
+  }
 }
 
 export async function getLicenseById(id: string) {
@@ -163,21 +167,33 @@ export async function extendLicense(licenseId: string, extraDays: number) {
  * expired the instant it was created.
  */
 export async function getActiveTiersForAdmin() {
-  await getUser()
-  return db
-    .select()
-    .from(licenseTiers)
-    .where(and(eq(licenseTiers.isActive, true), gt(licenseTiers.durationDays, 0)))
-    .orderBy(licenseTiers.price)
+  try {
+    await getUser()
+    const result = await db
+      .select()
+      .from(licenseTiers)
+      .where(and(eq(licenseTiers.isActive, true), gt(licenseTiers.durationDays, 0)))
+      .orderBy(licenseTiers.price)
+    return result
+  } catch (err) {
+    console.error('[v0:admin] getActiveTiersForAdmin error:', err)
+    throw new Error('Failed to fetch tiers')
+  }
 }
 
 // Customers
 export async function getAllCustomers() {
-  await getUser()
-  return db
-    .select()
-    .from(customers)
-    .orderBy(desc(customers.createdAt))
+  try {
+    await getUser()
+    const result = await db
+      .select()
+      .from(customers)
+      .orderBy(desc(customers.createdAt))
+    return result
+  } catch (err) {
+    console.error('[v0:admin] getAllCustomers error:', err)
+    throw new Error('Failed to fetch customers')
+  }
 }
 
 export async function getCustomerStats() {
@@ -321,70 +337,74 @@ export async function createManualLicense(data: {
   tierId: string
   durationDaysOverride?: number
 }) {
-  await getUser()
+  try {
+    await getUser()
 
-  // Resolve the customer so we can bind the license to the right userId.
-  const customerRows = await db
-    .select()
-    .from(customers)
-    .where(eq(customers.id, data.customerId))
-    .limit(1)
-  if (!customerRows.length) throw new Error('Customer not found')
-  const customer = customerRows[0]
+    // Resolve the customer so we can bind the license to the right userId.
+    const customerRows = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, data.customerId))
+      .limit(1)
+    if (!customerRows.length) throw new Error('Customer not found')
+    const customer = customerRows[0]
 
-  // Resolve the tier for its duration.
-  const tierRows = await db
-    .select()
-    .from(licenseTiers)
-    .where(eq(licenseTiers.id, data.tierId))
-    .limit(1)
-  if (!tierRows.length) throw new Error('Tier not found')
-  const tier = tierRows[0]
+    // Resolve the tier for its duration.
+    const tierRows = await db
+      .select()
+      .from(licenseTiers)
+      .where(eq(licenseTiers.id, data.tierId))
+      .limit(1)
+    if (!tierRows.length) throw new Error('Tier not found')
+    const tier = tierRows[0]
 
-  const durationDays = data.durationDaysOverride ?? tier.durationDays
+    const durationDays = data.durationDaysOverride ?? tier.durationDays
 
-  // Guard: a manually issued license must have a positive duration, otherwise
-  // it expires the instant it is created. (The minute-based free trial is
-  // issued through its own dedicated flow, never here.)
-  if (!Number.isFinite(durationDays) || durationDays < 1) {
-    throw new Error(
-      'Invalid duration: choose a paid tier or enter an override of at least 1 day.'
-    )
+    // Guard: a manually issued license must have a positive duration, otherwise
+    // it expires the instant it is created. (The minute-based free trial is
+    // issued through its own dedicated flow, never here.)
+    if (!Number.isFinite(durationDays) || durationDays < 1) {
+      throw new Error(
+        'Invalid duration: choose a paid tier or enter an override of at least 1 day.'
+      )
+    }
+    
+    const seg = (n: number) => crypto.randomBytes(n).toString('hex').toUpperCase()
+    const licenseKey = `LI-${seg(4)}-${seg(2)}-${seg(2)}-${seg(2)}`
+
+    const now = new Date()
+    const expiryDate = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000)
+
+    const licenseId = crypto.randomUUID()
+    const license = {
+      id: licenseId,
+      licenseKey,
+      tierId: data.tierId,
+      customerId: customer.id,
+      userId: customer.userId,
+      status: 'active',
+      expiresAt: expiryDate,
+      issuedAt: now,
+      seatsUsed: 0,
+      usageCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    await db.insert(licenses).values(license as any)
+
+    // Keep the customer's license count in sync.
+    await db
+      .update(customers)
+      .set({ licenseCount: (customer.licenseCount ?? 0) + 1, updatedAt: now })
+      .where(eq(customers.id, customer.id))
+
+    revalidatePath('/admin/licenses')
+    return license
+  } catch (err) {
+    console.error('[v0:admin] createManualLicense error:', err)
+    throw err instanceof Error ? err : new Error('Failed to create license')
   }
-  
-  const seg = (n: number) => crypto.randomBytes(n).toString('hex').toUpperCase()
-  const licenseKey = `LI-${seg(4)}-${seg(2)}-${seg(2)}-${seg(2)}`
-
-  const now = new Date()
-  const expiryDate = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000)
-
-  const licenseId = crypto.randomUUID()
-  const license = {
-    id: licenseId,
-    licenseKey,
-    tierId: data.tierId,
-    customerId: customer.id,
-    userId: customer.userId,
-    status: 'active',
-    expiresAt: expiryDate,
-    issuedAt: now,
-    hardwareFingerprints: [],
-    seatsUsed: 0,
-    usageCount: 0,
-    createdAt: now,
-    updatedAt: now,
-  }
-
-  await db.insert(licenses).values(license as any)
-
-  // Keep the customer's license count in sync.
-  await db
-    .update(customers)
-    .set({ licenseCount: (customer.licenseCount ?? 0) + 1, updatedAt: now })
-    .where(eq(customers.id, customer.id))
-
-  revalidatePath('/admin/licenses')
-  return license
 }
 
 // ---------------------------------------------------------------------------
