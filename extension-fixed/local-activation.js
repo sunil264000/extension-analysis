@@ -400,10 +400,11 @@
   // partially-cracked install revokes its own key.
   function runAttestation() {
     if (!LICORE || typeof LICORE.attest !== "function") {
-      // Core missing entirely → report using whatever key we still have.
+      // Core missing entirely → clear validation but DON'T report tamper
+      // (prevents false revocations due to extension loading timing)
       return storageGet(STORAGE_KEY_LICENSE_KEY).then(function (res) {
         var key = res[STORAGE_KEY_LICENSE_KEY];
-        try { if (LICORE && LICORE.reportTamper) LICORE.reportTamper(key, null, "NO_CORE", "attest() unavailable"); } catch (e) {}
+        // Disabled: try { if (LICORE && LICORE.reportTamper) LICORE.reportTamper(key, null, "NO_CORE", "attest() unavailable"); } catch (e) {}
         return clearValidation().then(function () { return { ok: false, reason: "NO_CORE" }; });
       });
     }
@@ -412,7 +413,8 @@
       return Promise.all([storageGet(STORAGE_KEY_LICENSE_KEY), getFingerprint()]).then(function (arr) {
         var key = arr[0][STORAGE_KEY_LICENSE_KEY];
         var fp = arr[1];
-        try { LICORE.reportTamper(key, fp, a.reason, "client attestation failed"); } catch (e) {}
+        // Disabled: try { LICORE.reportTamper(key, fp, a.reason, "client attestation failed"); } catch (e) {}
+        // Reason: Prevent false revocations from attest() failures due to timing or extension state
         return clearValidation().then(function () { return { ok: false, reason: a.reason }; });
       });
     });
