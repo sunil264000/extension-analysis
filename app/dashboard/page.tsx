@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   getCustomerProfile,
   getMyLicenses,
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { UsageChart } from '@/components/dashboard/usage-chart'
+import { signOut } from '@/lib/auth-client'
 
 function msLeft(expiresAt: Date | string): number {
   return Math.max(0, new Date(expiresAt).getTime() - Date.now())
@@ -44,6 +46,7 @@ function timeLeftLabel(expiresAt: Date | string): string {
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [licenses, setLicenses] = useState<License[]>([])
   const [payments, setPayments] = useState<Payment[]>([])
@@ -51,6 +54,12 @@ export default function DashboardPage() {
   const [isAdminUser, setIsAdminUser] = useState(false)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
+
+  const handleSignOut = async () => {
+    await signOut()
+    router.push('/')
+    router.refresh()
+  }
 
   useEffect(() => {
     const loadData = async () => {
@@ -132,11 +141,9 @@ export default function DashboardPage() {
             >
               Buy license
             </Button>
-            <form action="/api/auth/sign-out" method="POST">
-              <Button type="submit" size="sm" variant="outline">
-                Sign out
-              </Button>
-            </form>
+            <Button onClick={handleSignOut} size="sm" variant="outline">
+              Sign out
+            </Button>
           </div>
         </div>
       </nav>

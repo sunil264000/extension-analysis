@@ -33,11 +33,15 @@ interface ValidateRequest {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('[v0:validate] Starting license validation...')
+    
     const body = (await request.json()) as ValidateRequest
     const licenseKey = (body.licenseKey || '').trim()
     const hardwareFingerprint = (body.hardwareFingerprint || '').trim()
     const timezone = body.timezone || 'UTC'
     const userAgent = body.userAgent || request.headers.get('user-agent') || 'unknown'
+
+    console.log('[v0:validate] Request:', { licenseKey, hwid: hardwareFingerprint?.substring(0, 8) + '...' })
 
     // Get client IP address
     const clientIp =
@@ -57,12 +61,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Find license by key
+    console.log('[v0:validate] Looking up license:', licenseKey)
     const licenseRecord = await db
       .select()
       .from(licenses)
       .where(eq(licenses.licenseKey, licenseKey))
       .limit(1)
 
+    console.log('[v0:validate] License found:', licenseRecord?.length > 0)
     if (!licenseRecord || licenseRecord.length === 0) {
       return json(
         {
@@ -104,6 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get tier info (for seat limits + display)
+    console.log('[v0:validate] Looking up tier:', license.tierId)
     const tierRecord = await db
       .select()
       .from(licenseTiers)
@@ -111,6 +118,7 @@ export async function POST(request: NextRequest) {
       .limit(1)
     const tier = tierRecord?.[0]
     const maxSeats = tier?.maxSeats ?? 1
+    console.log('[v0:validate] Tier found:', tier?.displayName, 'maxSeats:', maxSeats)
 
     // Device binding — verify / register the hardware fingerprint
     const boundDevices = license.hardwareFingerprints || []
@@ -192,6 +200,7 @@ export async function POST(request: NextRequest) {
     // client-side, so faking validity or extending expiry is not possible
     // without the server's private key.
     const planName = tier?.displayName ?? 'Pro'
+    console.log('[v0:validate] Signing token...')
     const { token } = signLicenseToken({
       k: license.licenseKey,
       fp: hardwareFingerprint,
@@ -199,6 +208,7 @@ export async function POST(request: NextRequest) {
       status: 'active',
       exp: license.expiresAt.getTime(),
     })
+    console.log('[v0:validate] Token signed, returning response')
 
     return json({
       valid: true,
@@ -253,12 +263,14 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('[License Validation Error]', error)
+    console.error('[v0:validate] ERROR:', error instanceof Error ? error.message : error)
+    console.error('[v0:validate] Stack:', error instanceof Error ? error.stack : 'no stack')
     return json(
       {
         valid: false,
         message: 'Internal server error',
         error: 'SERVER_ERROR',
+        details: error instanceof Error ? error.message : String(error),
       },
       500
     )
